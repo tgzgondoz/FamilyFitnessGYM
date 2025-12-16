@@ -18,26 +18,26 @@ const { width, height } = Dimensions.get('window');
 
 const SplashScreen = ({ navigation }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 600,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 800,
+        duration: 600,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 8,
+        friction: 7,
         tension: 40,
         useNativeDriver: true,
       })
@@ -47,7 +47,7 @@ const SplashScreen = ({ navigation }) => {
   const handleGetStarted = () => {
     Animated.timing(fadeAnim, {
       toValue: 0,
-      duration: 300,
+      duration: 250,
       useNativeDriver: true,
     }).start(() => {
       navigation.replace('Login');
@@ -58,7 +58,7 @@ const SplashScreen = ({ navigation }) => {
 
   const buttonPressIn = () => {
     Animated.spring(buttonScale, {
-      toValue: 0.95,
+      toValue: 0.97,
       useNativeDriver: true,
     }).start();
   };
@@ -66,7 +66,7 @@ const SplashScreen = ({ navigation }) => {
   const buttonPressOut = () => {
     Animated.spring(buttonScale, {
       toValue: 1,
-      friction: 3,
+      friction: 4,
       tension: 40,
       useNativeDriver: true,
     }).start();
@@ -76,8 +76,7 @@ const SplashScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar 
         barStyle="light-content" 
-        backgroundColor="#000000" 
-        translucent={false}
+        backgroundColor="#141f23" 
       />
       
       <Animated.View 
@@ -89,12 +88,7 @@ const SplashScreen = ({ navigation }) => {
           }
         ]}
       >
-        {/* Subtle iOS-style background gradients */}
-        <View style={styles.backgroundGradient} />
-        <View style={styles.topGlow} />
-        <View style={styles.bottomGlow} />
-
-        {/* Logo with iOS-style shadow */}
+        {/* Logo */}
         <Animated.View 
           style={[
             styles.logoContainer,
@@ -103,16 +97,14 @@ const SplashScreen = ({ navigation }) => {
             }
           ]}
         >
-          <View style={styles.logoShadow}>
-            <Image 
-              source={require('../assets/logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
+          <Image 
+            source={require('../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </Animated.View>
 
-        {/* App Name with iOS typography */}
+        {/* App Name and Tagline */}
         <View style={styles.textContainer}>
           <Text style={styles.appName}>GYM</Text>
           <View style={styles.divider} />
@@ -123,7 +115,7 @@ const SplashScreen = ({ navigation }) => {
         {/* Spacer */}
         <View style={styles.spacer} />
 
-        {/* iOS-style Get Started Button */}
+        {/* Action Buttons */}
         <View style={styles.buttonContainer}>
           <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
             <TouchableOpacity 
@@ -148,9 +140,6 @@ const SplashScreen = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Safe area padding for iPhone X and above */}
-        {Platform.OS === 'ios' && <View style={styles.iosSafeArea} />}
       </Animated.View>
     </SafeAreaView>
   );
@@ -159,98 +148,54 @@ const SplashScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#141f23',
   },
   content: {
     flex: 1,
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 20 : 40,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-    paddingHorizontal: 24,
-  },
-  backgroundGradient: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
-  },
-  topGlow: {
-    position: 'absolute',
-    top: -height * 0.3,
-    left: -width * 0.5,
-    right: -width * 0.5,
-    height: height * 0.6,
-    backgroundColor: '#59cb01',
-    opacity: 0.03,
-    borderRadius: width,
-  },
-  bottomGlow: {
-    position: 'absolute',
-    bottom: -height * 0.2,
-    left: -width * 0.3,
-    right: -width * 0.3,
-    height: height * 0.4,
-    backgroundColor: '#59cb01',
-    opacity: 0.02,
-    borderRadius: width,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 40 : 30,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Platform.OS === 'ios' ? height * 0.08 : height * 0.1,
-  },
-  logoShadow: {
-    shadowColor: '#59cb01',
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-    backgroundColor: 'transparent',
+    marginTop: Platform.OS === 'ios' ? 60 : 40,
   },
   logoImage: {
-    width: width * 0.28,
-    height: width * 0.28,
-    tintColor: '#FFFFFF',
+    width: 100,
+    height: 100,
+    tintColor: '#f2faea',
   },
   textContainer: {
     alignItems: 'center',
-    marginTop: 40,
+    marginTop: 30,
   },
   appName: {
-    fontSize: 44,
-    fontWeight: Platform.OS === 'ios' ? '900' : 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    marginBottom: 16,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-condensed',
+    fontSize: 36,
+    fontWeight: Platform.OS === 'ios' ? '800' : 'bold',
+    color: '#f2faea',
+    letterSpacing: 1.5,
+    marginBottom: 12,
   },
   divider: {
-    width: 80,
-    height: 4,
+    width: 60,
+    height: 3,
     backgroundColor: '#59cb01',
     borderRadius: 2,
-    marginBottom: 20,
-    opacity: 0.9,
+    marginBottom: 16,
   },
   tagline: {
-    fontSize: 17,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    fontWeight: Platform.OS === 'ios' ? '600' : 'bold',
-    marginBottom: 8,
-    opacity: 0.95,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    fontSize: 16,
+    color: '#f2faea',
+    fontWeight: Platform.OS === 'ios' ? '500' : '600',
+    marginBottom: 6,
   },
   subTagline: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.7)',
-    letterSpacing: 0.3,
-    fontStyle: 'normal',
-    opacity: 0.8,
+    fontSize: 14,
+    color: 'rgba(242, 250, 234, 0.7)',
     fontWeight: Platform.OS === 'ios' ? '300' : 'normal',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   spacer: {
     flex: 1,
@@ -258,51 +203,35 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: '100%',
     alignItems: 'center',
-    marginTop: 'auto',
   },
   getStartedButton: {
     backgroundColor: '#59cb01',
-    paddingVertical: Platform.OS === 'ios' ? 16 : 18,
+    paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: Platform.OS === 'ios' ? 12 : 10,
+    borderRadius: 12,
     width: '100%',
-    maxWidth: 280,
+    maxWidth: 260,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#59cb01',
-    shadowOffset: {
-      width: 0,
-      height: Platform.OS === 'ios' ? 4 : 6,
-    },
-    shadowOpacity: Platform.OS === 'ios' ? 0.3 : 0.4,
-    shadowRadius: Platform.OS === 'ios' ? 12 : 15,
-    elevation: 8,
   },
   buttonText: {
-    fontSize: 18,
-    fontWeight: Platform.OS === 'ios' ? '700' : 'bold',
-    color: '#000000',
-    letterSpacing: 0.5,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
+    fontSize: 17,
+    fontWeight: Platform.OS === 'ios' ? '600' : 'bold',
+    color: '#141f23',
   },
   signInButton: {
-    marginTop: 24,
+    marginTop: 20,
     padding: 12,
   },
   signInText: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 15,
+    color: 'rgba(242, 250, 234, 0.8)',
     textAlign: 'center',
     fontWeight: Platform.OS === 'ios' ? '400' : 'normal',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
   signInLink: {
     color: '#59cb01',
     fontWeight: Platform.OS === 'ios' ? '600' : 'bold',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
-  },
-  iosSafeArea: {
-    height: Platform.OS === 'ios' ? 20 : 0,
   },
 });
 

@@ -92,14 +92,13 @@ const LoginScreen = ({ navigation }) => {
               />
             </TouchableOpacity>
 
-            {/* Logo */}
+            {/* Logo - Removed glow circle */}
             <View style={styles.logoContainer}>
               <Image 
                 source={require('../../assets/logo.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
-              <View style={styles.logoGlow} />
             </View>
 
             {/* Header */}
@@ -266,21 +265,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: height * 0.08,
     marginBottom: 40,
-    position: 'relative',
   },
   logoImage: {
-    width: 100, // Increased from 70
-    height: 100, // Increased from 70
+    width: 100,
+    height: 100,
     tintColor: '#f2faea',
-    zIndex: 2,
-  },
-  logoGlow: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(89, 203, 1, 0.1)',
-    zIndex: 1,
   },
   headerContainer: {
     alignItems: 'center',
