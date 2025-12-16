@@ -7,8 +7,7 @@ import {
   StyleSheet, 
   ScrollView, 
   SafeAreaView,
-  Dimensions,
-  Image
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BarChart, PieChart, LineChart } from 'react-native-chart-kit';
@@ -62,6 +61,15 @@ const AdminDashboard = ({ navigation }) => {
     { name: 'Mike Johnson', plan: 'Quarterly Basic', date: 'In 5 days' },
   ];
 
+  // Navigation tabs
+  const navItems = [
+    { icon: 'home', label: 'Dashboard', active: true },
+    { icon: 'people', label: 'Members', active: false },
+    { icon: 'calendar', label: 'Schedule', active: false },
+    { icon: 'stats-chart', label: 'Analytics', active: false },
+    { icon: 'settings', label: 'Settings', active: false },
+  ];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -71,7 +79,10 @@ const AdminDashboard = ({ navigation }) => {
             <Text style={styles.greeting}>Welcome back, Admin!</Text>
             <Text style={styles.date}>Today, December 17, 2024</Text>
           </View>
-          <TouchableOpacity style={styles.profileButton}>
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('AdminProfile')}
+          >
             <Ionicons name="person-circle" size={40} color="#59cb01" />
           </TouchableOpacity>
         </View>
@@ -161,7 +172,7 @@ const AdminDashboard = ({ navigation }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Upcoming Renewals</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('ManageUser')}>
               <Text style={styles.seeAll}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -217,6 +228,36 @@ const AdminDashboard = ({ navigation }) => {
           <Text style={styles.capacitySubtext}>Optimal capacity - Good for new members</Text>
         </View>
       </ScrollView>
+
+      {/* Navigation Bar */}
+      <View style={styles.navBar}>
+        {navItems.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[styles.navItem, item.active && styles.navItemActive]}
+            onPress={() => {
+              // Handle navigation to different screens
+              if (item.label === 'Members') {
+                navigation.navigate('ManageUser');
+              } else if (item.label === 'Settings') {
+                navigation.navigate('AdminProfile');
+              }
+            }}
+          >
+            <Ionicons 
+              name={item.icon} 
+              size={24} 
+              color={item.active ? '#59cb01' : '#8a9a9f'} 
+            />
+            <Text style={[
+              styles.navLabel, 
+              { color: item.active ? '#59cb01' : '#8a9a9f' }
+            ]}>
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </SafeAreaView>
   );
 };
@@ -230,6 +271,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#141f23',
     paddingHorizontal: 20,
+    paddingBottom: 80, // Space for navigation bar
   },
   header: {
     flexDirection: 'row',
@@ -413,6 +455,34 @@ const styles = StyleSheet.create({
   capacitySubtext: {
     fontSize: 12,
     color: '#8a9a9f',
+  },
+  // Navigation Bar Styles
+  navBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    backgroundColor: '#1e2b2f',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(242, 250, 234, 0.1)',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  navItemActive: {
+    backgroundColor: 'rgba(89, 203, 1, 0.1)',
+    borderRadius: 8,
+  },
+  navLabel: {
+    fontSize: 10,
+    marginTop: 4,
+    fontWeight: '500',
   },
 });
 
