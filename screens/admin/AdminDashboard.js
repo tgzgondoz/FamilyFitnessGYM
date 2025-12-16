@@ -1,4 +1,4 @@
-// screens/DashboardScreen.js
+// screens/AdminDashboard.js
 import React from 'react';
 import { 
   View, 
@@ -15,7 +15,7 @@ import { BarChart, PieChart, LineChart } from 'react-native-chart-kit';
 
 const { width } = Dimensions.get('window');
 
-const DashboardScreen = ({ navigation }) => {
+const AdminDashboard = ({ navigation }) => {
   // Sample data for charts
   const attendanceData = {
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -416,4 +416,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default DashboardScreen;
+export default AdminDashboard;

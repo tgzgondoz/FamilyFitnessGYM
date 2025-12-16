@@ -131,7 +131,7 @@ const SplashScreen = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.signInButton}
-            onPress={() => navigation.replace('Login')}
+            onPress={() => navigation.replace('AdminDashboard')}
             activeOpacity={0.7}
           >
             <Text style={styles.signInText}>

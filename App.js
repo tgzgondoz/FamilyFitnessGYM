@@ -1,4 +1,4 @@
-// Updated App.js to include new screens
+// Updated App.js - Simplified version
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -11,6 +11,7 @@ import { NotificationProvider } from "./contexts/NotificationContext";
 import SplashScreen from "./screens/SplashScreen";
 import LoginScreen from "./screens/Auth/LoginScreen";
 import SignUpScreen from "./screens/Auth/SignUpScreen";
+import AdminDashboard from "./screens/admin/AdminDashboard";
 import DashboardScreen from "./screens/DashboardScreen";
 import SubscriptionScreen from "./screens/SubscriptionScreen";
 import EcoCashPaymentScreen from "./screens/EcoCashPaymentScreen";
@@ -48,7 +49,7 @@ function MainTabs() {
           fontWeight: "500",
           marginBottom: 4,
         },
-        headerShown: false, // Hide headers for all tab screens
+        headerShown: false,
       })}
     >
       <Tab.Screen
@@ -85,7 +86,7 @@ export default function App() {
           <Stack.Navigator 
             initialRouteName="Splash"
             screenOptions={{
-              headerShown: false, // Hide all headers globally
+              headerShown: false,
               contentStyle: {
                 backgroundColor: "#141f23",
               }
@@ -107,11 +108,19 @@ export default function App() {
               name="Main"
               component={MainTabs}
             />
+            {/* Add AdminDashboard directly to the main stack */}
+            <Stack.Screen
+              name="AdminDashboard"
+              component={AdminDashboard}
+              options={{
+                headerShown: false,
+              }}
+            />
             <Stack.Screen
               name="EcoCashPayment"
               component={EcoCashPaymentScreen}
               options={{
-                headerShown: false, // Show header for this screen only
+                headerShown: true,
                 title: "EcoCash Payment",
                 headerStyle: {
                   backgroundColor: "#141f23",
@@ -123,7 +132,6 @@ export default function App() {
                 headerBackTitle: "Back",
               }}
             />
-            {/* You can add other screens here as needed */}
           </Stack.Navigator>
         </NavigationContainer>
       </NotificationProvider>
