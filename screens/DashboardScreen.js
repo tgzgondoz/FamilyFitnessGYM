@@ -16,64 +16,117 @@ import { BarChart, PieChart, LineChart } from 'react-native-chart-kit';
 const { width } = Dimensions.get('window');
 
 const DashboardScreen = ({ navigation }) => {
-  // Sample data for charts
+  // User-specific data
+  const userData = {
+    name: 'John Doe',
+    membership: 'Monthly Premium',
+    daysLeft: 12,
+    nextPayment: '$50',
+    lastVisit: 'Yesterday, 3:45 PM',
+    streak: 8,
+    caloriesBurned: '2,450',
+    workoutsCompleted: 18
+  };
+
+  // User attendance data
   const attendanceData = {
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets: [{
-      data: [65, 78, 82, 75, 90, 95, 70],
+      data: [1, 1, 0, 1, 1, 0, 1],
       color: (opacity = 1) => `rgba(89, 203, 1, ${opacity})`,
       strokeWidth: 2
     }]
   };
 
-  const membershipData = [
-    { name: 'Monthly', population: 68, color: '#59cb01', legendFontColor: '#f2faea' },
-    { name: 'Quarterly', population: 22, color: '#36a1d6', legendFontColor: '#f2faea' },
-    { name: 'Annual', population: 10, color: '#ff6b6b', legendFontColor: '#f2faea' }
+  // Workout distribution
+  const workoutData = [
+    { name: 'Cardio', population: 40, color: '#59cb01', legendFontColor: '#f2faea' },
+    { name: 'Strength', population: 35, color: '#36a1d6', legendFontColor: '#f2faea' },
+    { name: 'Flexibility', population: 25, color: '#ff6b6b', legendFontColor: '#f2faea' }
   ];
 
-  const revenueData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+  // Progress data
+  const progressData = {
+    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6'],
     datasets: [{
-      data: [8500, 9200, 10500, 11200, 12850, 13500],
+      data: [65, 68, 72, 70, 74, 78],
       color: (opacity = 1) => `rgba(89, 203, 1, ${opacity})`,
     }]
   };
 
+  // User stats
   const stats = [
-    { icon: 'people', label: 'Active Members', value: '245', change: '+12%', color: '#59cb01' },
-    { icon: 'cash', label: 'Monthly Revenue', value: '$12,850', change: '+8%', color: '#36a1d6' },
-    { icon: 'barbell', label: 'Class Bookings', value: '178', change: '+15%', color: '#ff6b6b' },
-    { icon: 'time', label: 'Avg. Visit Time', value: '68min', change: '+5%', color: '#ffd93d' },
+    { icon: 'flame', label: 'Calories Burned', value: userData.caloriesBurned, change: '+12%', color: '#59cb01' },
+    { icon: 'barbell', label: 'Workouts Done', value: userData.workoutsCompleted, change: '+15%', color: '#36a1d6' },
+    { icon: 'fitness', label: 'Current Streak', value: `${userData.streak} days`, change: '+3 days', color: '#ff6b6b' },
+    { icon: 'time', label: 'Avg. Time', value: '68min', change: '+5%', color: '#ffd93d' },
   ];
 
+  // Quick actions for users
   const quickActions = [
-    { icon: 'add-circle', label: 'New Member', screen: 'AddMember' },
-    { icon: 'calendar', label: 'Schedule', screen: 'Schedule' },
-    { icon: 'notifications', label: 'Notifications', screen: 'Notifications' },
-    { icon: 'stats-chart', label: 'Reports', screen: 'Reports' },
-    { icon: 'card', label: 'Payments', screen: 'Payments' },
-    { icon: 'fitness', label: 'Classes', screen: 'Classes' },
+    { icon: 'calendar', label: 'Book Class', screen: 'BookClass' },
+    { icon: 'barbell', label: 'Start Workout', screen: 'Workout' },
+    { icon: 'card', label: 'My Membership', screen: 'Subscription' },
+    { icon: 'stats-chart', label: 'Progress', screen: 'Progress' },
+    { icon: 'person', label: 'Trainer', screen: 'Trainer' },
+    { icon: 'nutrition', label: 'Nutrition', screen: 'Nutrition' },
   ];
 
-  const upcomingRenewals = [
-    { name: 'John Doe', plan: 'Monthly Premium', date: 'Tomorrow' },
-    { name: 'Sarah Smith', plan: 'Annual Gold', date: 'In 3 days' },
-    { name: 'Mike Johnson', plan: 'Quarterly Basic', date: 'In 5 days' },
+  // Upcoming bookings
+  const upcomingBookings = [
+    { class: 'HIIT Session', trainer: 'Coach Mike', time: 'Today, 5:00 PM' },
+    { class: 'Yoga Flow', trainer: 'Instructor Sarah', time: 'Tomorrow, 7:00 AM' },
+    { class: 'Personal Training', trainer: 'Trainer Alex', time: 'Friday, 4:30 PM' },
+  ];
+
+  // Recommended workouts
+  const recommendedWorkouts = [
+    { name: 'Full Body Burn', duration: '45 min', intensity: 'Medium', icon: 'flame' },
+    { name: 'Core Strength', duration: '30 min', intensity: 'Hard', icon: 'barbell' },
+    { name: 'Cardio Blast', duration: '35 min', intensity: 'High', icon: 'fitness' },
   ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        {/* Header with User Info */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome back, Admin!</Text>
+            <Text style={styles.greeting}>Welcome back, {userData.name}!</Text>
             <Text style={styles.date}>Today, December 17, 2024</Text>
+            <View style={styles.membershipBadge}>
+              <Ionicons name="ribbon" size={14} color="#59cb01" />
+              <Text style={styles.membershipText}>{userData.membership}</Text>
+            </View>
           </View>
-          <TouchableOpacity style={styles.profileButton}>
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}
+          >
             <Ionicons name="person-circle" size={40} color="#59cb01" />
           </TouchableOpacity>
+        </View>
+
+        {/* Membership Status */}
+        <View style={styles.membershipCard}>
+          <View style={styles.membershipHeader}>
+            <Text style={styles.membershipTitle}>Your Membership</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Subscription')}>
+              <Text style={styles.seeAll}>Manage</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.countdownContainer}>
+            <View style={styles.countdownCircle}>
+              <Text style={styles.countdownDays}>{userData.daysLeft}</Text>
+              <Text style={styles.countdownLabel}>days left</Text>
+            </View>
+            <View style={styles.countdownInfo}>
+              <Text style={styles.nextPaymentText}>Next Payment</Text>
+              <Text style={styles.nextPaymentAmount}>{userData.nextPayment}</Text>
+              <Text style={styles.lastVisit}>Last visit: {userData.lastVisit}</Text>
+            </View>
+          </View>
         </View>
 
         {/* Stats Grid */}
@@ -90,16 +143,16 @@ const DashboardScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Revenue Chart */}
+        {/* Progress Chart */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Revenue Trend</Text>
+            <Text style={styles.sectionTitle}>Weight Progress</Text>
             <TouchableOpacity>
-              <Text style={styles.seeAll}>See Details</Text>
+              <Text style={styles.seeAll}>Details</Text>
             </TouchableOpacity>
           </View>
           <LineChart
-            data={revenueData}
+            data={progressData}
             width={width - 40}
             height={200}
             chartConfig={{
@@ -117,13 +170,13 @@ const DashboardScreen = ({ navigation }) => {
           />
         </View>
 
-        {/* Membership Distribution */}
+        {/* Workout Distribution */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Membership Distribution</Text>
+            <Text style={styles.sectionTitle}>Workout Balance</Text>
           </View>
           <PieChart
-            data={membershipData}
+            data={workoutData}
             width={width - 40}
             height={180}
             chartConfig={{
@@ -157,36 +210,69 @@ const DashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Upcoming Renewals */}
+        {/* Upcoming Bookings */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Upcoming Renewals</Text>
+            <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
             <TouchableOpacity>
               <Text style={styles.seeAll}>View All</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.renewalsList}>
-            {upcomingRenewals.map((member, index) => (
-              <View key={index} style={styles.renewalItem}>
-                <View style={styles.renewalInfo}>
-                  <Text style={styles.memberName}>{member.name}</Text>
-                  <Text style={styles.memberPlan}>{member.plan}</Text>
+          <View style={styles.bookingsList}>
+            {upcomingBookings.map((booking, index) => (
+              <TouchableOpacity key={index} style={styles.bookingItem}>
+                <View style={styles.bookingInfo}>
+                  <Text style={styles.className}>{booking.class}</Text>
+                  <Text style={styles.trainerName}>with {booking.trainer}</Text>
                 </View>
-                <View style={styles.renewalDate}>
-                  <Text style={styles.dateText}>{member.date}</Text>
-                  <TouchableOpacity style={styles.remindButton}>
-                    <Text style={styles.remindText}>Remind</Text>
-                  </TouchableOpacity>
+                <View style={styles.bookingTime}>
+                  <Ionicons name="time-outline" size={16} color="#59cb01" />
+                  <Text style={styles.timeText}>{booking.time}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Attendance Stats */}
+        {/* Recommended Workouts */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Weekly Attendance</Text>
+            <Text style={styles.sectionTitle}>Recommended For You</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.workoutScroll}>
+            {recommendedWorkouts.map((workout, index) => (
+              <TouchableOpacity key={index} style={styles.workoutCard}>
+                <View style={styles.workoutHeader}>
+                  <View style={styles.workoutIcon}>
+                    <Ionicons name={workout.icon} size={24} color="#59cb01" />
+                  </View>
+                  <View style={styles.intensityBadge}>
+                    <Text style={styles.intensityText}>{workout.intensity}</Text>
+                  </View>
+                </View>
+                <Text style={styles.workoutName}>{workout.name}</Text>
+                <View style={styles.workoutDetails}>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="time-outline" size={14} color="#8a9a9f" />
+                    <Text style={styles.detailText}>{workout.duration}</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="flame-outline" size={14} color="#8a9a9f" />
+                    <Text style={styles.detailText}>300 cal</Text>
+                  </View>
+                </View>
+                <TouchableOpacity style={styles.startButton}>
+                  <Text style={styles.startButtonText}>Start</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Weekly Attendance */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>This Week's Attendance</Text>
           </View>
           <BarChart
             data={attendanceData}
@@ -205,16 +291,16 @@ const DashboardScreen = ({ navigation }) => {
           />
         </View>
 
-        {/* Gym Capacity */}
+        {/* Gym Status */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Current Gym Capacity</Text>
-            <Text style={styles.capacityText}>68/120</Text>
+            <Text style={styles.sectionTitle}>Gym Status</Text>
+            <Text style={styles.capacityText}>Moderate</Text>
           </View>
           <View style={styles.capacityBar}>
-            <View style={[styles.capacityFill, { width: '57%' }]} />
+            <View style={[styles.capacityFill, { width: '45%' }]} />
           </View>
-          <Text style={styles.capacitySubtext}>Optimal capacity - Good for new members</Text>
+          <Text style={styles.capacitySubtext}>Good time to workout - Not too busy</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -234,7 +320,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 20,
   },
   greeting: {
@@ -246,6 +332,22 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 14,
     color: '#8a9a9f',
+    marginBottom: 8,
+  },
+  membershipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(89, 203, 1, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  membershipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#59cb01',
+    marginLeft: 4,
   },
   profileButton: {
     width: 44,
@@ -254,6 +356,68 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(242, 250, 234, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  membershipCard: {
+    backgroundColor: '#1e2b2f',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(242, 250, 234, 0.1)',
+  },
+  membershipHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  membershipTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#f2faea',
+  },
+  countdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countdownCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(89, 203, 1, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#59cb01',
+    marginRight: 20,
+  },
+  countdownDays: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#59cb01',
+  },
+  countdownLabel: {
+    fontSize: 10,
+    color: '#8a9a9f',
+    marginTop: 2,
+  },
+  countdownInfo: {
+    flex: 1,
+  },
+  nextPaymentText: {
+    fontSize: 14,
+    color: '#8a9a9f',
+    marginBottom: 4,
+  },
+  nextPaymentAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#f2faea',
+    marginBottom: 8,
+  },
+  lastVisit: {
+    fontSize: 12,
+    color: '#8a9a9f',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -346,13 +510,13 @@ const styles = StyleSheet.create({
     color: '#f2faea',
     textAlign: 'center',
   },
-  renewalsList: {
+  bookingsList: {
     backgroundColor: '#1e2b2f',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(242, 250, 234, 0.1)',
   },
-  renewalItem: {
+  bookingItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -360,38 +524,95 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(242, 250, 234, 0.1)',
   },
-  renewalInfo: {
+  bookingInfo: {
     flex: 1,
   },
-  memberName: {
+  className: {
     fontSize: 16,
     fontWeight: '600',
     color: '#f2faea',
     marginBottom: 4,
   },
-  memberPlan: {
+  trainerName: {
     fontSize: 12,
     color: '#8a9a9f',
   },
-  renewalDate: {
-    alignItems: 'flex-end',
+  bookingTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  dateText: {
-    fontSize: 14,
-    color: '#59cb01',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  remindButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(89, 203, 1, 0.1)',
-    borderRadius: 8,
-  },
-  remindText: {
+  timeText: {
     fontSize: 12,
     color: '#59cb01',
+    marginLeft: 6,
+  },
+  workoutScroll: {
+    flexDirection: 'row',
+  },
+  workoutCard: {
+    width: 160,
+    backgroundColor: '#1e2b2f',
+    borderRadius: 16,
+    padding: 16,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(242, 250, 234, 0.1)',
+  },
+  workoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  workoutIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(89, 203, 1, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intensityBadge: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  intensityText: {
+    fontSize: 10,
+    color: '#ff6b6b',
     fontWeight: '600',
+  },
+  workoutName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f2faea',
+    marginBottom: 12,
+  },
+  workoutDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#8a9a9f',
+    marginLeft: 4,
+  },
+  startButton: {
+    backgroundColor: '#59cb01',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#141f23',
   },
   capacityBar: {
     height: 12,

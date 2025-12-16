@@ -4,7 +4,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
-import Ionicons from "react-native-vector-icons/Ionicons";
+import { Ionicons } from '@expo/vector-icons';
 
 import { AuthProvider } from "./contexts/AuthContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
@@ -34,23 +34,21 @@ function MainTabs() {
             iconName = focused ? "notifications" : "notifications-outline";
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: "#59cb01", // Changed to match your color scheme
-        tabBarInactiveTintColor: "#8a9a9f", // Changed to match your color scheme
+        tabBarActiveTintColor: "#59cb01",
+        tabBarInactiveTintColor: "#8a9a9f",
         tabBarStyle: {
-          backgroundColor: "#141f23", // Dark background to match theme
-          borderTopColor: "rgba(242, 250, 234, 0.1)", // Subtle border
+          backgroundColor: "#141f23",
+          borderTopColor: "rgba(242, 250, 234, 0.1)",
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: "500",
+          marginBottom: 4,
         },
-        headerStyle: {
-          backgroundColor: "#141f23", // Match dark theme
-        },
-        headerTintColor: "#f2faea", // Light text color
-        headerTitleStyle: {
-          fontWeight: "bold",
-        },
+        headerShown: false, // Hide headers for all tab screens
       })}
     >
       <Tab.Screen
@@ -58,18 +56,21 @@ function MainTabs() {
         component={DashboardScreen}
         options={{ 
           title: "Dashboard",
-          headerShown: false // Hide header since Dashboard has its own
         }}
       />
       <Tab.Screen
         name="Subscription"
         component={SubscriptionScreen}
-        options={{ title: "My Subscription" }}
+        options={{ 
+          title: "My Subscription",
+        }}
       />
       <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
-        options={{ title: "Notifications" }}
+        options={{ 
+          title: "Notifications",
+        }}
       />
     </Tab.Navigator>
   );
@@ -80,59 +81,49 @@ export default function App() {
     <AuthProvider>
       <NotificationProvider>
         <NavigationContainer>
-          <StatusBar style="light" /> {/* Changed to "light" for dark theme */}
+          <StatusBar style="light" />
           <Stack.Navigator 
             initialRouteName="Splash"
             screenOptions={{
-              headerStyle: {
-                backgroundColor: "#141f23", // Dark theme
-              },
-              headerTintColor: "#f2faea", // Light text
-              headerTitleStyle: {
-                fontWeight: "bold",
-              },
+              headerShown: false, // Hide all headers globally
               contentStyle: {
-                backgroundColor: "#141f23", // Background for all screens
+                backgroundColor: "#141f23",
               }
             }}
           >
             <Stack.Screen
               name="Splash"
               component={SplashScreen}
-              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Login"
               component={LoginScreen}
-              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="SignUp"
               component={SignUpScreen}
-              options={{ 
-                title: "Create Account",
-                headerShown: false // Assuming SignUpScreen has its own header
-              }}
             />
             <Stack.Screen
               name="Main"
               component={MainTabs}
-              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="EcoCashPayment"
               component={EcoCashPaymentScreen}
-              options={{ 
+              options={{
+                headerShown: false, // Show header for this screen only
                 title: "EcoCash Payment",
-                headerBackTitle: "Back", // For iOS
+                headerStyle: {
+                  backgroundColor: "#141f23",
+                },
+                headerTintColor: "#f2faea",
+                headerTitleStyle: {
+                  fontWeight: "bold",
+                },
+                headerBackTitle: "Back",
               }}
             />
-            {/* REMOVE THIS DUPLICATE - Dashboard is already in MainTabs */}
-            {/* <Stack.Screen
-              name="Dashboard"
-              component={DashboardScreen}
-              options={{ headerShown: false }}
-            /> */}
+            {/* You can add other screens here as needed */}
           </Stack.Navigator>
         </NavigationContainer>
       </NotificationProvider>
