@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 10,
     marginTop: 4,
-    fontWeight: '500',
+    fontWeight: '500' ,
   },
 });
 
