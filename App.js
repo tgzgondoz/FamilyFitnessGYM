@@ -6,13 +6,13 @@ import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-// 1. IMPORT the NotificationProvider
 import { NotificationProvider } from './contexts/NotificationContext'; 
 
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/Auth/LoginScreen';
 import SignUpScreen from './screens/Auth/SignUpScreen';
 import MainScreen from './screens/MainScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
 import EcoCashPaymentScreen from './screens/EcoCashPaymentScreen';
@@ -20,6 +20,7 @@ import StaffSalesScreen from './screens/StaffSalesScreen';
 import AttendanceScreen from './screens/AttendanceScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import AddStaffScreen from './screens/Admin/AddStaffScreen'; 
+import WorkoutHistoryScreen from './screens/WorkoutHistory';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -39,10 +40,7 @@ function MainTabs() {
           height: 60,
           paddingBottom: 8,
         },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '500',
-        },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
         headerShown: false,
       })}
     >
@@ -56,6 +54,7 @@ function MainTabs() {
         }} 
       />
 
+      {/* Staff and Managers can both Check-In clients */}
       {(isStaff() || isManager()) && (
         <Tab.Screen 
           name="Attendance" 
@@ -69,6 +68,7 @@ function MainTabs() {
         />
       )}
       
+      {/* Staff and Managers can both Record Sales */}
       {(isStaff() || isManager()) && (
         <Tab.Screen 
           name="Sales" 
@@ -103,13 +103,15 @@ function MainTabs() {
         }} 
       />
 
+      {/* Admin tab specifically for Manager to add Staff */}
       {isManager() && (
         <Tab.Screen 
           name="Admin" 
           component={AddStaffScreen} 
           options={{ 
+            title: 'Staff Management',
             tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons name={focused ? 'shield' : 'shield-outline'} size={size} color={color} />
+              <Ionicons name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} size={size} color={color} />
             )
           }} 
         />
@@ -140,8 +142,10 @@ function RootNavigator() {
       ) : (
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="WorkoutHistory" component={WorkoutHistoryScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Subscription" component={SubscriptionScreen} options={{ title: 'Membership' }} />
-          <Stack.Screen name="EcoCashPayment" component={EcoCashPaymentScreen} options={{ title: 'EcoCash' }} />
+          <Stack.Screen name="EcoCashPayment" component={EcoCashPaymentScreen} options={{ title: 'EcoCash Payment' }} />
         </>
       )}
     </Stack.Navigator>
@@ -151,7 +155,6 @@ function RootNavigator() {
 export default function App() {
   return (
     <AuthProvider>
-      {/* 2. WRAP everything inside NotificationProvider */}
       <NotificationProvider> 
         <NavigationContainer>
           <StatusBar style="light" />

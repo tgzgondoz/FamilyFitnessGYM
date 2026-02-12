@@ -1,717 +1,387 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, 
-  TextInput, Alert, ActivityIndicator, SafeAreaView,
-  Dimensions, RefreshControl, Animated, ScrollView
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../config/supabase';
-import { useAuth } from '../contexts/AuthContext';
-
-const { width } = Dimensions.get('window');
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+  RefreshControl,
+  Modal,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  Swipeable,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import { supabase } from "../config/supabase";
+import { useAuth } from "../contexts/AuthContext";
 
 const AttendanceScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [clients, setClients] = useState([]);
   const [recentCheckIns, setRecentCheckIns] = useState([]);
-  const [todayCount, setTodayCount] = useState(0);
-  const [todayDate, setTodayDate] = useState('');
 
-  // Animation values
-  const fadeAnim = new Animated.Value(0);
-  const slideAnim = new Animated.Value(30);
+  // New State for Modal/Walk-in
+  const [showModal, setShowModal] = useState(false);
+  const [walkInName, setWalkInName] = useState("");
 
   useEffect(() => {
     fetchData();
-    setTodayDate(new Date().toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    }));
-    
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
   }, []);
 
   const fetchData = async () => {
     try {
-      setLoading(true);
-      // Fetch all clients for the search list
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, full_name, email')
-        .eq('role', 'client');
-      setClients(userData || []);
+      const twentyFourHoursAgo = new Date(
+        Date.now() - 24 * 60 * 60 * 1000
+      ).toISOString();
 
-      // Fetch today's check-ins
-      const today = new Date().toISOString().split('T')[0];
-      const { data: checkInData } = await supabase
-        .from('check_ins')
-        .select(`*, user:users(full_name)`)
-        .gte('check_in_time', today)
-        .order('check_in_time', { ascending: false });
-      setRecentCheckIns(checkInData || []);
-      setTodayCount(checkInData?.length || 0);
+      const [clientsRes, checkInsRes] = await Promise.all([
+        supabase
+          .from("users")
+          .select("id, full_name, email")
+          .eq("role", "client"),
+        supabase
+          .from("check_ins")
+          .select(
+            `id, check_in_time, walk_in_name, user_id, users:user_id (full_name)`
+          )
+          .gte("check_in_time", twentyFourHoursAgo)
+          .order("check_in_time", { ascending: false }),
+      ]);
+
+      setClients(clientsRes.data || []);
+      setRecentCheckIns(checkInsRes.data || []);
     } catch (error) {
       console.error(error);
-      Alert.alert('Error', 'Failed to fetch attendance data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
-
-  const handleCheckIn = async (client) => {
+  // Logic to handle checking in a registered member
+  const handleCheckIn = async (clientId, clientName) => {
     try {
-      const { error } = await supabase
-        .from('check_ins')
-        .insert([{ user_id: client.id, staff_id: user.id }]);
+      setLoading(true);
+      const { error } = await supabase.from("check_ins").insert([
+        {
+          user_id: clientId,
+          check_in_time: new Date().toISOString(),
+        },
+      ]);
 
       if (error) throw error;
 
-      Alert.alert(
-        "Check-in Successful",
-        `${client.full_name} has been checked in!`,
-        [{ text: 'OK', onPress: () => fetchData() }]
-      );
+      Alert.alert("Success", `${clientName} checked in!`);
+      setSearch(""); // Clear search to go back to active list
+      fetchData();
     } catch (error) {
       Alert.alert("Error", error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleQuickCheckIn = async () => {
-    Alert.prompt(
-      "Quick Check-in",
-      "Enter member name:",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Check In', onPress: async (name) => {
-          if (name && name.trim()) {
-            try {
-              const { data: existingClient } = await supabase
-                .from('users')
-                .select('id, full_name')
-                .eq('full_name', name.trim())
-                .eq('role', 'client')
-                .single();
+  // Logic for Walk-in Guest
+  const handleWalkIn = async () => {
+    if (!walkInName.trim()) return Alert.alert("Error", "Enter guest name");
 
-              if (existingClient) {
-                await handleCheckIn(existingClient);
-              } else {
-                Alert.alert(
-                  "Member Not Found",
-                  "Would you like to check in as a walk-in?",
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                      text: 'Check In', 
-                      onPress: async () => {
-                        const { error } = await supabase
-                          .from('check_ins')
-                          .insert([{ 
-                            user_id: null, 
-                            staff_id: user.id,
-                            walk_in_name: name.trim()
-                          }]);
+    try {
+      setLoading(true);
+      const { error } = await supabase.from("check_ins").insert([
+        {
+          walk_in_name: walkInName,
+          check_in_time: new Date().toISOString(),
+        },
+      ]);
 
-                        if (error) throw error;
-                        
-                        Alert.alert("Success", "Walk-in check-in recorded!");
-                        fetchData();
-                      }
-                    }
-                  ]
-                );
-              }
-            } catch (error) {
-              Alert.alert("Error", error.message);
-            }
-          }
-        }}
-      ],
-      'plain-text'
-    );
+      if (error) throw error;
+
+      setShowModal(false);
+      setWalkInName("");
+      fetchData();
+    } catch (error) {
+      Alert.alert("Error", error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredClients = clients.filter(c => 
-    c.full_name.toLowerCase().includes(search.toLowerCase())
+  const confirmDelete = (id, name) => {
+    Alert.alert("Remove Check-in", `Are you sure you want to remove ${name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const { error } = await supabase
+            .from("check_ins")
+            .delete()
+            .eq("id", id);
+          if (!error) fetchData();
+        },
+      },
+    ]);
+  };
+
+  const renderRightActions = (id, name) => (
+    <TouchableOpacity
+      style={styles.deleteAction}
+      onPress={() => confirmDelete(id, name)}
+    >
+      <Ionicons name="trash-outline" size={24} color="#fff" />
+      <Text style={styles.deleteActionText}>Delete</Text>
+    </TouchableOpacity>
   );
 
-  const getTimeAgo = (dateString) => {
-    const now = new Date();
-    const checkInTime = new Date(dateString);
-    const diffMs = now - checkInTime;
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 2) return '1 hour ago';
-    return `${diffHours} hours ago`;
-  };
-
-  const formatTime = (dateString) => {
-    return new Date(dateString).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
-
-  const getInitials = (name) => {
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  if (loading && !refreshing) {
+  const renderActiveItem = ({ item }) => {
+    const name = item.users?.full_name || item.walk_in_name || "Guest";
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFD700" />
-        <Text style={styles.loadingText}>Loading attendance data...</Text>
-      </View>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <Animated.View 
-        style={[
-          styles.header,
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-        ]}
-      >
-        <View>
-          <Text style={styles.title}>Attendance</Text>
-          <Text style={styles.subtitle}>{todayDate}</Text>
-        </View>
-        <View style={styles.todayStats}>
-          <View style={styles.statBadge}>
-            <Ionicons name="people" size={16} color="#FFD700" />
-            <Text style={styles.statText}>{todayCount}</Text>
+      <Swipeable renderRightActions={() => renderRightActions(item.id, name)}>
+        <View style={styles.card}>
+          <View style={styles.avatar}>
+            <Text style={styles.initials}>{name.charAt(0).toUpperCase()}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.nameText}>{name}</Text>
+            <Text style={styles.timeText}>
+              {new Date(item.check_in_time).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Text>
+          </View>
+          <View style={styles.badge}>
+            <View style={styles.pulse} />
+            <Text style={styles.badgeText}>IN</Text>
           </View>
         </View>
-      </Animated.View>
+      </Swipeable>
+    );
+  };
 
-      {/* Quick Actions Bar */}
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity 
-          style={styles.quickCheckInButton}
-          onPress={handleQuickCheckIn}
-        >
-          <Ionicons name="add-circle" size={20} color="#000" />
-          <Text style={styles.quickCheckInText}>Quick Check-in</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={fetchData}
-        >
-          <Ionicons name="refresh" size={20} color="#FFD700" />
-        </TouchableOpacity>
-      </View>
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Attendance</Text>
+          <View style={styles.statBadge}>
+            <Text style={styles.statText}>{recentCheckIns.length} Active</Text>
+          </View>
+        </View>
 
-      {/* Search Section */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#8a9a9f" />
+        <View style={styles.searchBox}>
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search member name..."
-            placeholderTextColor="#8a9a9f"
+            style={styles.input}
+            placeholder="Search member to check in..."
+            placeholderTextColor="#666"
             value={search}
             onChangeText={setSearch}
           />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={20} color="#8a9a9f" />
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        {search.length > 0 && (
-          <View style={styles.searchResultsHeader}>
-            <Text style={styles.resultsTitle}>
-              {filteredClients.length} member{filteredClients.length !== 1 ? 's' : ''} found
-            </Text>
-            <Text style={styles.resultsHint}>Tap to check in</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Search Results */}
-      {search.length > 0 && filteredClients.length > 0 ? (
-        <Animated.View 
-          style={[
-            styles.resultsContainer,
-            { opacity: fadeAnim }
-          ]}
-        >
-          <FlatList
-            data={filteredClients}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity 
-                style={styles.clientCard}
-                onPress={() => handleCheckIn(item)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.clientAvatar}>
-                  <Text style={styles.clientInitials}>
-                    {getInitials(item.full_name)}
-                  </Text>
-                </View>
-                <View style={styles.clientInfo}>
-                  <Text style={styles.clientName} numberOfLines={1}>
-                    {item.full_name}
-                  </Text>
-                  <Text style={styles.clientEmail} numberOfLines={1}>
-                    {item.email}
-                  </Text>
-                </View>
-                <TouchableOpacity 
-                  style={styles.checkInButton}
-                  onPress={() => handleCheckIn(item)}
-                >
-                  <Ionicons name="log-in-outline" size={20} color="#FFD700" />
-                  <Text style={styles.checkInButtonText}>Check In</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={styles.resultsList}
-            style={styles.resultsListContainer}
-          />
-        </Animated.View>
-      ) : search.length > 0 ? (
-        <View style={styles.noResultsContainer}>
-          <Ionicons name="search-outline" size={60} color="#2c3e50" />
-          <Text style={styles.noResultsText}>No members found</Text>
-          <Text style={styles.noResultsSubtext}>
-            Try a different search term or use quick check-in
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Today's Check-ins Section */}
-      <View style={styles.todaySection}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>Today's Check-ins</Text>
-            <Text style={styles.sectionSubtitle}>
-              {recentCheckIns.length} member{recentCheckIns.length !== 1 ? 's' : ''} checked in today
-            </Text>
-          </View>
-          <View style={styles.checkInCount}>
-            <Text style={styles.checkInCountText}>{todayCount}</Text>
-          </View>
         </View>
 
         <FlatList
-          data={recentCheckIns}
-          keyExtractor={(item) => item.id}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
+          data={
+            search.trim().length > 0
+              ? clients.filter((c) =>
+                  c.full_name?.toLowerCase().includes(search.toLowerCase())
+                )
+              : recentCheckIns
+          }
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+          renderItem={
+            search.trim().length > 0
+              ? ({ item }) => (
+                  <TouchableOpacity
+                    style={styles.card}
+                    onPress={() => handleCheckIn(item.id, item.full_name)}
+                  >
+                    <View
+                      style={[styles.avatar, { backgroundColor: "#59cb01" }]}
+                    >
+                      <Ionicons name="person" size={20} color="#000" />
+                    </View>
+                    <Text style={styles.nameText}>{item.full_name}</Text>
+                    <Ionicons name="add-circle" size={28} color="#59cb01" />
+                  </TouchableOpacity>
+                )
+              : renderActiveItem
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#FFD700']}
-              tintColor="#FFD700"
+              onRefresh={fetchData}
+              tintColor="#59cb01"
             />
           }
-          contentContainerStyle={styles.checkInList}
-          ListEmptyComponent={
-            <View style={styles.emptyCheckIns}>
-              <Ionicons name="calendar-outline" size={60} color="#2c3e50" />
-              <Text style={styles.emptyCheckInsText}>No check-ins yet today</Text>
-              <Text style={styles.emptyCheckInsSubtext}>
-                Start checking in members or use quick check-in
-              </Text>
-            </View>
-          }
-          renderItem={({ item, index }) => (
-            <Animated.View 
-              style={[
-                styles.checkInCard,
-                {
-                  opacity: fadeAnim,
-                  transform: [{
-                    translateX: fadeAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [50, 0]
-                    })
-                  }]
-                }
-              ]}
-            >
-              <View style={styles.checkInAvatar}>
-                <Text style={styles.checkInInitials}>
-                  {item.user?.full_name ? getInitials(item.user.full_name) : 'WI'}
-                </Text>
-              </View>
-              <View style={styles.checkInDetails}>
-                <Text style={styles.checkInName}>
-                  {item.user?.full_name || item.walk_in_name || 'Walk-in Member'}
-                </Text>
-                <View style={styles.checkInMeta}>
-                  <View style={styles.timeTag}>
-                    <Ionicons name="time-outline" size={12} color="#8a9a9f" />
-                    <Text style={styles.checkInTime}>
-                      {formatTime(item.check_in_time)}
-                    </Text>
-                  </View>
-                  <Text style={styles.checkInAgo}>
-                    {getTimeAgo(item.check_in_time)}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.checkInStatus}>
-                <Ionicons name="checkmark-circle" size={24} color="#59cb01" />
-              </View>
-            </Animated.View>
-          )}
         />
-      </View>
-    </SafeAreaView>
+
+        {/* Floating Action Button */}
+        <TouchableOpacity style={styles.fab} onPress={() => setShowModal(true)}>
+          <Ionicons name="walk" size={24} color="#000" />
+          <Text style={styles.fabText}>Walk-in</Text>
+        </TouchableOpacity>
+
+        {/* Walk-in Modal */}
+        <Modal visible={showModal} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalView}>
+              <Text style={styles.modalTitle}>Guest Check-in</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter Guest Name"
+                placeholderTextColor="#666"
+                value={walkInName}
+                onChangeText={setWalkInName}
+                autoFocus
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => setShowModal(false)}
+                >
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.confirmBtn}
+                  onPress={handleWalkIn}
+                >
+                  <Text style={styles.confirmBtnText}>Check In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0c1519',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0c1519',
-  },
-  loadingText: {
-    color: '#8a9a9f',
-    marginTop: 12,
-    fontSize: 14,
-  },
+  container: { flex: 1, backgroundColor: "#0c1519" },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 15,
+    padding: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  title: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    color: '#8a9a9f',
-    fontSize: 14,
-    marginTop: 4,
-  },
-  todayStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  title: { fontSize: 28, fontWeight: "bold", color: "#fff" },
   statBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e2b2f',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: "rgba(89, 203, 1, 0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  statText: { color: "#59cb01", fontWeight: "bold" },
+  searchBox: { paddingHorizontal: 20, marginBottom: 15 },
+  input: {
+    backgroundColor: "#1e2b2f",
+    color: "#fff",
+    padding: 15,
+    borderRadius: 12,
+  },
+  card: {
+    backgroundColor: "#1e2b2f",
+    padding: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    borderRadius: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    gap: 6,
+    backgroundColor: "#59cb01",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
   },
-  statText: {
-    color: '#FFD700',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 12,
-  },
-  quickCheckInButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFD700',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+  initials: { fontWeight: "bold", color: "#000" },
+  nameText: { color: "#fff", fontSize: 16, fontWeight: "bold", flex: 1 },
+  timeText: { color: "#8a9a9f", fontSize: 12 },
+  badge: { flexDirection: "row", alignItems: "center", gap: 5 },
+  pulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#59cb01" },
+  badgeText: { color: "#59cb01", fontSize: 10, fontWeight: "bold" },
+  deleteAction: {
+    backgroundColor: "#ff4444",
+    justifyContent: "center",
+    alignItems: "center",
+    width: 80,
+    height: "85%",
     borderRadius: 12,
-    gap: 8,
-  },
-  quickCheckInText: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  refreshButton: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#1e2b2f',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchSection: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e2b2f',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 52,
-    marginBottom: 10,
-  },
-  searchInput: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 12,
-    marginRight: 12,
-  },
-  searchResultsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  resultsTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  resultsHint: {
-    color: '#8a9a9f',
-    fontSize: 12,
-  },
-  resultsContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  resultsListContainer: {
-    backgroundColor: '#1e2b2f',
-    borderRadius: 16,
-    padding: 4,
-  },
-  resultsList: {
-    paddingVertical: 8,
-  },
-  clientCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141f23',
-    borderRadius: 12,
-    padding: 16,
     marginBottom: 8,
   },
-  clientAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFD700',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  clientInitials: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  clientInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  clientName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  clientEmail: {
-    color: '#8a9a9f',
-    fontSize: 12,
-  },
-  checkInButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  checkInButtonText: {
-    color: '#FFD700',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  noResultsContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  noResultsText: {
-    color: '#8a9a9f',
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  noResultsSubtext: {
-    color: '#666',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  todaySection: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  sectionSubtitle: {
-    color: '#8a9a9f',
+  deleteActionText: {
+    color: "#fff",
+    fontWeight: "bold",
     fontSize: 12,
     marginTop: 4,
   },
-  checkInCount: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFD700',
-    justifyContent: 'center',
-    alignItems: 'center',
+  // FAB Styles
+  fab: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    backgroundColor: "#59cb01",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderRadius: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
-  checkInCountText: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  checkInList: {
-    paddingBottom: 30,
-  },
-  emptyCheckIns: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyCheckInsText: {
-    color: '#8a9a9f',
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  emptyCheckInsSubtext: {
-    color: '#666',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  checkInCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e2b2f',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  checkInAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFD70020',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: '#FFD70040',
-  },
-  checkInInitials: {
-    color: '#FFD700',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  checkInDetails: {
+  fabText: { color: "#000", fontWeight: "bold", marginLeft: 8 },
+  // Modal Styles
+  modalOverlay: {
     flex: 1,
-    marginRight: 12,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    padding: 20,
   },
-  checkInName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 6,
+  modalView: {
+    backgroundColor: "#1e2b2f",
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: "#000",
   },
-  checkInMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 20,
   },
-  timeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141f23',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
+  modalInput: {
+    backgroundColor: "#0c1519",
+    color: "#fff",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
   },
-  checkInTime: {
-    color: '#8a9a9f',
-    fontSize: 12,
-    fontWeight: '600',
+  modalButtons: { flexDirection: "row", justifyContent: "flex-end", gap: 15 },
+  cancelBtn: { padding: 10 },
+  cancelBtnText: { color: "#8a9a9f", fontWeight: "bold" },
+
+
+  confirmBtn: {
+    backgroundColor: "#59cb01",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
-  checkInAgo: {
-    color: '#8a9a9f',
-    fontSize: 12,
-  },
-  checkInStatus: {
-    padding: 4,
-  },
+  confirmBtnText: { color: "#000", fontWeight: "bold" },
 });
 
 export default AttendanceScreen;

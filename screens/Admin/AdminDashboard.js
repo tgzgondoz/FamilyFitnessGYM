@@ -1,5 +1,5 @@
 // screens/AdminDashboard.js
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,19 +10,19 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { BarChart, PieChart, LineChart } from "react-native-chart-kit";
+import { PieChart, LineChart } from "react-native-chart-kit";
 import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../config/supabase";
 
 const { width } = Dimensions.get("window");
 
 const AdminDashboard = ({ navigation }) => {
   const { user, logout } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
-  // 1. Chart Data matching your brand theme
+  // 1. Chart Data (Logic preserved from old file)
   const revenueData = {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     datasets: [
@@ -38,23 +38,23 @@ const AdminDashboard = ({ navigation }) => {
       name: "Monthly",
       population: 68,
       color: "#59cb01",
-      legendFontColor: "#f2faea",
+      legendFontColor: "#FFF",
     },
     {
       name: "Quarterly",
       population: 22,
       color: "#36a1d6",
-      legendFontColor: "#f2faea",
+      legendFontColor: "#FFF",
     },
     {
       name: "Annual",
       population: 10,
       color: "#ff6b6b",
-      legendFontColor: "#f2faea",
+      legendFontColor: "#FFF",
     },
   ];
 
-  // 2. Functional Actions for Testing
+  // 2. Functional Actions
   const handleResetPassword = (email) => {
     Alert.alert("Security", `Send reset link to ${email}?`, [
       { text: "Cancel" },
@@ -85,79 +85,78 @@ const AdminDashboard = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" />
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Header - Dynamically shows your Admin Email */}
+        {/* Header - Preserved Logic for dynamic email */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Manager Portal</Text>
-            <Text style={styles.date}>{user?.email || "Admin Account"}</Text>
+            <Text style={styles.headerTitle}>Manager Portal</Text>
+            <Text style={styles.headerSubtitle}>
+              {user?.email || "Admin Account"}
+            </Text>
           </View>
-          <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
+          <TouchableOpacity onPress={logout} style={styles.logoutButton}>
             <Ionicons name="log-out-outline" size={24} color="#ff6b6b" />
           </TouchableOpacity>
         </View>
 
-        {/* Stats Grid */}
+        {/* Stats Grid - Using the New UI Card Style */}
         <View style={styles.statsGrid}>
-          {[
-            {
-              label: "Active Members",
-              value: "245",
-              icon: "people",
-              color: "#59cb01",
-            },
-            {
-              label: "Monthly Rev",
-              value: "$12.8k",
-              icon: "cash",
-              color: "#36a1d6",
-            },
-          ].map((stat, i) => (
-            <View key={i} style={styles.statCard}>
-              <View
-                style={[
-                  styles.statIcon,
-                  { backgroundColor: `${stat.color}20` },
-                ]}
-              >
-                <Ionicons name={stat.icon} size={20} color={stat.color} />
-              </View>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+          <View style={styles.statItem}>
+            <View
+              style={[
+                styles.statIcon,
+                { backgroundColor: "rgba(89, 203, 1, 0.1)" },
+              ]}
+            >
+              <Ionicons name="people" size={20} color="#59cb01" />
             </View>
-          ))}
-        </View>
+            <Text style={styles.statValue}>245</Text>
+            <Text style={styles.statLabel}>Active Members</Text>
+          </View>
 
-        {/* Manager Quick Actions - Linked to your schema roles */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Management Tools</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate("Admin")} // Matches your Tab name in App.js
+          <View style={styles.statItem}>
+            <View
+              style={[
+                styles.statIcon,
+                { backgroundColor: "rgba(54, 161, 214, 0.1)" },
+              ]}
             >
-              <Ionicons name="person-add" size={24} color="#59cb01" />
-              <Text style={styles.actionLabel}>Add Staff</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() =>
-                Alert.alert("Coming Soon", "Client Management module.")
-              }
-            >
-              <Ionicons name="people-circle" size={24} color="#36a1d6" />
-              <Text style={styles.actionLabel}>Manage Clients</Text>
-            </TouchableOpacity>
+              <Ionicons name="cash" size={20} color="#36a1d6" />
+            </View>
+            <Text style={styles.statValue}>$12.8k</Text>
+            <Text style={styles.statLabel}>Monthly Rev</Text>
           </View>
         </View>
 
-        {/* Revenue Line Chart */}
-        <View style={styles.chartCard}>
-          <Text style={styles.sectionTitle}>Revenue Trend (USD)</Text>
+        {/* Management Tools */}
+        <Text style={styles.sectionTitle}>Management Tools</Text>
+        <View style={styles.toolsContainer}>
+          <TouchableOpacity
+            style={styles.toolButton}
+            onPress={() => navigation.navigate("Admin")}
+          >
+            <Ionicons name="person-add" size={24} color="#59cb01" />
+            <Text style={styles.toolText}>Add Staff</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.toolButton}
+            onPress={() =>
+              Alert.alert("Coming Soon", "Client Management module.")
+            }
+          >
+            <Ionicons name="people-circle" size={24} color="#36a1d6" />
+            <Text style={styles.toolText}>Manage Clients</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Revenue Chart */}
+        <Text style={styles.sectionTitle}>Revenue Trend (USD)</Text>
+        <View style={styles.chartContainer}>
           <LineChart
             data={revenueData}
-            width={width - 40}
+            width={width - 72} // Adjusted for padding
             height={180}
             chartConfig={chartConfig}
             bezier
@@ -165,41 +164,49 @@ const AdminDashboard = ({ navigation }) => {
           />
         </View>
 
-        {/* Member Renewals List */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Renewals</Text>
-          <View style={styles.list}>
-            {[
-              { name: "John Doe", plan: "Monthly", email: "john@gmail.com" },
-              { name: "Sarah S.", plan: "Annual", email: "sarah@gmail.com" },
-            ].map((item, index) => (
-              <View key={index} style={styles.listItem}>
-                <View>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemSub}>{item.plan}</Text>
-                </View>
-                <View style={styles.row}>
-                  <TouchableOpacity
-                    onPress={() => handleResetPassword(item.email)}
-                    style={styles.iconBtn}
-                  >
-                    <Ionicons name="key-outline" size={18} color="#ffd93d" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleRenew(item.name)}
-                    style={styles.renewBtn}
-                  >
-                    <Text style={styles.renewText}>Renew</Text>
-                  </TouchableOpacity>
-                </View>
+        {/* Upcoming Renewals List */}
+        <Text style={styles.sectionTitle}>Upcoming Renewals</Text>
+        <View style={styles.renewalsContainer}>
+          {[
+            { name: "John Doe", plan: "Monthly Plan", email: "john@gmail.com" },
+            {
+              name: "Sarah Smith",
+              plan: "Annual Plan",
+              email: "sarah@gmail.com",
+            },
+          ].map((item, index) => (
+            <View
+              key={index}
+              style={[
+                styles.renewalItem,
+                index === 1 && { borderBottomWidth: 0 },
+              ]}
+            >
+              <View>
+                <Text style={styles.renewalName}>{item.name}</Text>
+                <Text style={styles.renewalPlan}>{item.plan}</Text>
               </View>
-            ))}
-          </View>
+              <View style={styles.renewalActions}>
+                <TouchableOpacity
+                  onPress={() => handleResetPassword(item.email)}
+                  style={styles.iconButton}
+                >
+                  <Ionicons name="key" size={18} color="#ffd93d" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleRenew(item.name)}
+                  style={styles.renewButton}
+                >
+                  <Text style={styles.renewButtonText}>Renew</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
         </View>
 
         {/* Membership Distribution */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Membership Split</Text>
+        <Text style={styles.sectionTitle}>Membership Split</Text>
+        <View style={styles.chartContainer}>
           <PieChart
             data={membershipData}
             width={width - 40}
@@ -218,12 +225,11 @@ const AdminDashboard = ({ navigation }) => {
   );
 };
 
-// Chart Shared Config
 const chartConfig = {
   backgroundGradientFrom: "#1e2b2f",
   backgroundGradientTo: "#1e2b2f",
   color: (opacity = 1) => `rgba(89, 203, 1, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(242, 250, 234, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
   decimalPlaces: 0,
   propsForDots: { r: "4", strokeWidth: "2", stroke: "#59cb01" },
 };
@@ -237,97 +243,134 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#141f23",
   },
+
   header: {
+    paddingTop: 20,
+    paddingBottom: 15,
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 20,
-  },
-  greeting: { fontSize: 24, fontWeight: "bold", color: "#f2faea" },
-  date: { fontSize: 13, color: "#8a9a9f", marginTop: 4 },
-  logoutBtn: {
-    padding: 8,
-    backgroundColor: "rgba(255, 107, 107, 0.1)",
-    borderRadius: 10,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 25,
-  },
-  statCard: {
-    width: "48%",
-    backgroundColor: "#1e2b2f",
-    padding: 15,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-  },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
     alignItems: "center",
     marginBottom: 10,
   },
-  statValue: { fontSize: 20, fontWeight: "bold", color: "#f2faea" },
-  statLabel: { fontSize: 12, color: "#8a9a9f" },
-  section: { marginBottom: 25 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#f2faea",
-    marginBottom: 15,
+  headerTitle: {
+    color: "#fff",
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
-  actionsGrid: { flexDirection: "row", gap: 12 },
-  actionButton: {
+  headerSubtitle: {
+    color: "#8a9a9f",
+    fontSize: 14,
+    marginTop: 4,
+    fontWeight: "500",
+  },
+  logoutButton: {
+    padding: 10,
+    backgroundColor: "rgba(255, 107, 107, 0.1)",
+    borderRadius: 12,
+  },
+
+  statsGrid: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 30,
+  },
+  statItem: {
     flex: 1,
     backgroundColor: "#1e2b2f",
-    padding: 15,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.03)",
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
+    marginBottom: 12,
   },
-  actionLabel: {
-    color: "#f2faea",
-    fontSize: 12,
-    marginTop: 8,
+  statValue: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#FFF",
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: "#8a9a9f",
     fontWeight: "600",
   },
-  chartCard: {
-    backgroundColor: "#1e2b2f",
-    padding: 15,
-    borderRadius: 16,
-    marginBottom: 25,
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#FFF",
+    marginBottom: 15,
   },
-  chart: { borderRadius: 16, marginLeft: -15 },
-  list: { backgroundColor: "#1e2b2f", borderRadius: 12, overflow: "hidden" },
-  listItem: {
+
+  toolsContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 30,
+  },
+  toolButton: {
+    flex: 1,
+    backgroundColor: "#1e2b2f",
+    borderRadius: 18,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.03)",
+  },
+  toolText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFF",
+    marginTop: 10,
+  },
+
+  chartContainer: {
+    backgroundColor: "#1e2b2f",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.03)",
+  },
+  chart: { borderRadius: 16 },
+
+  renewalsContainer: {
+    backgroundColor: "#1e2b2f",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 30,
+  },
+  renewalItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 15,
+    paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
+    borderBottomColor: "rgba(255, 255, 255, 0.05)",
   },
-  itemName: { color: "#f2faea", fontSize: 15, fontWeight: "600" },
-  itemSub: { color: "#8a9a9f", fontSize: 12 },
-  row: { flexDirection: "row", alignItems: "center" },
-  iconBtn: {
-    padding: 8,
+  renewalName: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  renewalPlan: { fontSize: 13, color: "#8a9a9f", marginTop: 2 },
+  renewalActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+
+  iconButton: {
+    padding: 10,
     backgroundColor: "rgba(255, 217, 61, 0.1)",
-    borderRadius: 8,
-    marginRight: 8,
+    borderRadius: 10,
   },
-  renewBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  renewButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: "rgba(89, 203, 1, 0.1)",
-    borderRadius: 8,
+    borderRadius: 10,
   },
-  renewText: { color: "#59cb01", fontSize: 12, fontWeight: "bold" },
+  renewButtonText: { color: "#59cb01", fontSize: 13, fontWeight: "700" },
 });
 
 export default AdminDashboard;

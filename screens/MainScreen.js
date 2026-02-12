@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,10 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  Image,
-  Alert,
-  ActivityIndicator,
   RefreshControl,
+  TextInput,
+  Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../contexts/AuthContext";
@@ -17,9 +17,21 @@ import { supabase } from "../config/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 
 const MainScreen = ({ navigation }) => {
-  const { user, logout, isManager, isStaff } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { user, isManager, isStaff } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Modals Toggle
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
+  const [showTimerModal, setShowTimerModal] = useState(false);
+  const [showCalorieModal, setShowCalorieModal] = useState(false);
+  const [showBadgeModal, setShowBadgeModal] = useState(false);
+
+  // Functional State
+  const [activeSession, setActiveSession] = useState(null);
+  const [timerDisplay, setTimerDisplay] = useState("00:00:00");
+  const [dailyTasks, setDailyTasks] = useState([]);
+  const [newTaskName, setNewTaskName] = useState("");
+
   const [stats, setStats] = useState({
     workouts: 0,
     hours: 0,
@@ -29,343 +41,607 @@ const MainScreen = ({ navigation }) => {
     planName: "No Active Plan",
   });
 
-  const fetchDashboardData = async () => {
+  const [analytics, setAnalytics] = useState({
+    todaySales: 0,
+    todayCheckins: 0,
+  });
+
+  // Progress Calculation
+  const completedCount = dailyTasks.filter((t) => t.is_completed).length;
+  const totalCount = dailyTasks.length;
+  const progressPercent =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  // Timer Tick Logic
+  useEffect(() => {
+    let interval;
+    if (activeSession) {
+      interval = setInterval(() => {
+        const start = new Date(activeSession.start_time);
+        const diff = Math.floor((new Date() - start) / 1000);
+        const h = Math.floor(diff / 3600)
+          .toString()
+          .padStart(2, "0");
+        const m = Math.floor((diff % 3600) / 60)
+          .toString()
+          .padStart(2, "0");
+        const s = (diff % 60).toString().padStart(2, "0");
+        setTimerDisplay(`${h}:${m}:${s}`);
+      }, 1000);
+    } else {
+      setTimerDisplay("00:00:00");
+    }
+    return () => clearInterval(interval);
+  }, [activeSession]);
+
+  const fetchData = async () => {
     try {
-      setLoading(true);
+      // Syncing Today's Start to UTC Midnight
+      const startOfToday = new Date();
+      startOfToday.setUTCHours(0, 0, 0, 0);
+      const isoToday = startOfToday.toISOString();
 
-      // 1. Get Real Workout Count from check_ins table
-      const { count: workoutCount, error: countError } = await supabase
-        .from("check_ins")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
+      const [sessionRes, tasksRes, statsRes, lastSaleRes] = await Promise.all([
+        supabase
+          .from("workout_sessions")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .maybeSingle(),
+        supabase
+          .from("daily_workouts")
+          .select("*")
+          .eq("user_id", user.id)
+          .gte("created_at", isoToday)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("workout_sessions")
+          .select("duration_minutes, calories_burned")
+          .eq("user_id", user.id)
+          .eq("status", "completed"),
+        supabase
+          .from("sales")
+          .select("created_at, product_name")
+          .eq("client_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
-      // 2. Get Latest Subscription for Expiry and Plan name
-      const { data: latestSale } = await supabase
-        .from("sales")
-        .select("created_at, product_name")
-        .eq("client_id", user.id)
-        .eq("type", "subscription")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+      setActiveSession(sessionRes.data);
+      setDailyTasks(tasksRes.data || []);
 
-      // Logic for Expiry (30 days from purchase)
-      let expiryStr = "Expired/None";
-      if (latestSale) {
-        const date = new Date(latestSale.created_at);
-        date.setDate(date.getDate() + 30);
-        expiryStr = date.toLocaleDateString("en-GB");
-      }
+      const totalMins =
+        statsRes.data?.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) ||
+        0;
+      const totalCals =
+        statsRes.data?.reduce((sum, s) => sum + (s.calories_burned || 0), 0) ||
+        0;
 
       setStats({
-        workouts: workoutCount || 0,
-        hours: Math.round((workoutCount || 0) * 1.5), // Assume 1.5h per session
-        calories: (workoutCount || 0) * 500, // Assume 500 kcal per session
-        achievements: Math.floor((workoutCount || 0) / 5), // 1 trophy every 5 visits
-        expiryDate: expiryStr,
-        planName: latestSale?.product_name || "No Active Plan",
+        workouts: statsRes.data?.length || 0,
+        hours: (totalMins / 60).toFixed(1),
+        calories: Math.round(totalCals),
+        achievements: Math.floor(totalCals / 1000),
+        expiryDate: lastSaleRes.data
+          ? new Date(
+              new Date(lastSaleRes.data.created_at).setDate(
+                new Date(lastSaleRes.data.created_at).getDate() + 30
+              )
+            ).toLocaleDateString("en-GB")
+          : "N/A",
+        planName: lastSaleRes.data?.product_name || "No Active Plan",
       });
-    } catch (error) {
-      console.log("Stats fetch error:", error.message);
+
+      // BUSINESS ANALYTICS FOR STAFF/MANAGERS
+      if (isStaff() || isManager()) {
+        const [salesRes, trafficRes] = await Promise.all([
+          supabase.from("sales").select("amount").gte("created_at", isoToday),
+          supabase
+            .from("check_ins") // Fixed table name
+            .select("*", { count: "exact", head: true })
+            .gte("check_in_time", isoToday), // Fixed column name
+        ]);
+
+        const totalSales =
+          salesRes.data?.reduce((sum, item) => sum + (item.amount || 0), 0) ||
+          0;
+
+        setAnalytics({
+          todaySales: totalSales,
+          todayCheckins: trafficRes.count || 0,
+        });
+      }
+    } catch (err) {
+      console.error("Fetch Main Data Error:", err);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Auto-refresh when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      fetchDashboardData();
+      fetchData();
     }, [])
   );
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchDashboardData();
+  const handleWorkoutAction = async () => {
+    if (activeSession) {
+      const end = new Date();
+      const start = new Date(activeSession.start_time);
+      const durationMins = Math.max(1, Math.floor((end - start) / 60000));
+      await supabase
+        .from("workout_sessions")
+        .update({
+          end_time: end.toISOString(),
+          duration_minutes: durationMins,
+          calories_burned: durationMins * 10,
+          status: "completed",
+        })
+        .eq("id", activeSession.id);
+      setActiveSession(null);
+      Alert.alert("Success", "Workout session saved!");
+    } else {
+      const { data } = await supabase
+        .from("workout_sessions")
+        .insert([{ user_id: user.id, start_time: new Date().toISOString() }])
+        .select()
+        .single();
+      setActiveSession(data);
+    }
+    fetchData();
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good Morning";
-    if (hour < 18) return "Good Afternoon";
-    return "Good Evening";
+  const addTask = async () => {
+    if (!newTaskName.trim()) return;
+    await supabase
+      .from("daily_workouts")
+      .insert([{ user_id: user.id, workout_name: newTaskName }]);
+    setNewTaskName("");
+    fetchData();
+  };
+
+  const resetRoutine = async () => {
+    Alert.alert("Reset Today", "Remove all workouts?", [
+      { text: "Cancel" },
+      {
+        text: "Reset",
+        onPress: async () => {
+          const t = new Date();
+          t.setUTCHours(0, 0, 0, 0);
+          await supabase
+            .from("daily_workouts")
+            .delete()
+            .eq("user_id", user.id)
+            .gte("created_at", t.toISOString());
+          fetchData();
+        },
+      },
+    ]);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         style={styles.container}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={fetchData}
             tintColor="#59cb01"
           />
         }
       >
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate("Profile")}
-          >
-            <View style={styles.avatarContainer}>
-              {user?.profile_image ? (
-                <Image
-                  source={{ uri: user.profile_image }}
-                  style={styles.avatar}
-                />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarText}>
-                    {user?.full_name?.charAt(0)}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.greeting}>{getGreeting()},</Text>
-              <Text style={styles.userName}>{user?.full_name}</Text>
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleText}>{user?.role?.toUpperCase()}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-            <Ionicons name="log-out-outline" size={24} color="#ff6b6b" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Membership Status Card */}
-        <View style={styles.statusCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Gym Access</Text>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: stats.expiryDate.includes("/")
-                    ? "#59cb01"
-                    : "#ff4444",
-                },
-              ]}
-            >
-              <Text style={styles.statusText}>
-                {stats.expiryDate.includes("/") ? "ACTIVE" : "INACTIVE"}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Hello,</Text>
+            <Text style={styles.userName}>{user?.full_name}</Text>
+          </View>
+          <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitial}>
+                {user?.full_name?.charAt(0)}
               </Text>
             </View>
-          </View>
-
-          <View style={styles.statusDetails}>
-            <View style={styles.statusItem}>
-              <Ionicons name="calendar-outline" size={20} color="#8a9a9f" />
-              <Text style={styles.statusLabel}>Expires:</Text>
-              <Text style={styles.statusValue}>{stats.expiryDate}</Text>
-            </View>
-            <View style={styles.statusItem}>
-              <Ionicons name="fitness-outline" size={20} color="#8a9a9f" />
-              <Text style={styles.statusLabel}>Plan:</Text>
-              <Text style={styles.statusValue}>{stats.planName}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.renewButton}
-            onPress={() => navigation.navigate("Subscription")}
-          >
-            <Text style={styles.renewButtonText}>Manage Subscription</Text>
-            <Ionicons name="arrow-forward" size={18} color="#141f23" />
           </TouchableOpacity>
         </View>
 
-        {/* Progress Section */}
-        <Text style={styles.sectionTitle}>Your Progress</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Ionicons name="walk" size={28} color="#59cb01" />
-            <Text style={styles.statNumber}>{stats.workouts}</Text>
-            <Text style={styles.statLabel}>Sessions</Text>
+        {/* STAFF/MANAGER QUICK ACTIONS ROW */}
+        {(isStaff() || isManager()) && (
+          <View style={styles.staffActionRow}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => navigation.navigate("Attendance")}
+            >
+              <Ionicons name="people" size={20} color="#59cb01" />
+              <Text style={styles.actionBtnText}>Check-In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => navigation.navigate("Sales")}
+            >
+              <Ionicons name="cash" size={20} color="#59cb01" />
+              <Text style={styles.actionBtnText}>Sale</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.statCard}>
-            <Ionicons name="time" size={28} color="#007AFF" />
-            <Text style={styles.statNumber}>{stats.hours}h</Text>
-            <Text style={styles.statLabel}>Total Time</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="flame" size={28} color="#FF3B30" />
-            <Text style={styles.statNumber}>
-              {stats.calories.toLocaleString()}
-            </Text>
-            <Text style={styles.statLabel}>Kcal Burned</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="trophy" size={28} color="#FFD700" />
-            <Text style={styles.statNumber}>{stats.achievements}</Text>
-            <Text style={styles.statLabel}>Badges</Text>
-          </View>
+        )}
+
+        <View style={styles.membershipCard}>
+          <Text style={styles.membershipTitle}>ACTIVE PLAN</Text>
+          <Text style={styles.planNameText}>{stats.planName}</Text>
+          <Text style={styles.expiryText}>Expires: {stats.expiryDate}</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => navigation.navigate("Subscription")}
+          >
+            <Text style={styles.primaryButtonText}>Manage Plan</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Staff/Manager Quick Actions */}
         {(isStaff() || isManager()) && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Management</Text>
-            <View style={styles.buttonGrid}>
-              <TouchableOpacity
-                style={[styles.gridButton, { backgroundColor: "#FFD700" }]}
-                onPress={() => navigation.navigate("Attendance")}
-              >
-                <Ionicons name="people" size={30} color="#141f23" />
-                <Text style={[styles.gridButtonText, { color: "#141f23" }]}>
-                  Check-In
+          <View style={styles.analyticsSection}>
+            <Text style={styles.sectionTitle}>Gym Pulse (Today)</Text>
+            <View style={styles.analyticsRow}>
+              <View style={styles.analyticsCard}>
+                <Text style={styles.analyticsLabel}>Sales Revenue</Text>
+                <Text style={styles.analyticsValue}>
+                  ${analytics.todaySales.toFixed(2)}
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.gridButton,
-                  {
-                    backgroundColor: "#1e2b2f",
-                    borderWidth: 1,
-                    borderColor: "#59cb01",
-                  },
-                ]}
-                onPress={() => navigation.navigate("Sales")}
+              </View>
+              <View
+                style={[styles.analyticsCard, { borderLeftColor: "#FFD700" }]}
               >
-                <Ionicons name="cart" size={30} color="#59cb01" />
-                <Text style={[styles.gridButtonText, { color: "#59cb01" }]}>
-                  Record Sale
+                <Text style={styles.analyticsLabel}>Client Traffic</Text>
+                <Text style={styles.analyticsValue}>
+                  {analytics.todayCheckins}
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}
 
-        {/* Member Quick Actions */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Quick Links</Text>
-          <View style={styles.buttonGrid}>
+        <Text style={styles.sectionTitle}>Your Fitness Progress</Text>
+        <View style={styles.statsContainer}>
+          <StatTile
+            icon="barbell"
+            color="#59cb01"
+            value={stats.workouts}
+            label="Workouts"
+            onPress={() => setShowWorkoutModal(true)}
+          />
+          <StatTile
+            icon="time"
+            color="#007AFF"
+            value={`${stats.hours}h`}
+            label="Hours"
+            onPress={() => setShowTimerModal(true)}
+          />
+          <StatTile
+            icon="flame"
+            color="#FF4444"
+            value={stats.calories}
+            label="Calories"
+            onPress={() => setShowCalorieModal(true)}
+          />
+          <StatTile
+            icon="trophy"
+            color="#FFD700"
+            value={stats.achievements}
+            label="Badges"
+            onPress={() => setShowBadgeModal(true)}
+          />
+
+          <TouchableOpacity
+            style={styles.historyTile}
+            onPress={() => navigation.navigate("WorkoutHistory")}
+          >
+            <Ionicons name="calendar" size={20} color="#59cb01" />
+            <Text style={styles.historyText}>Detailed Workout History</Text>
+            <Ionicons name="chevron-forward" size={18} color="#8a9a9f" />
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* WORKOUT ROUTINE MODAL */}
+      <Modal visible={showWorkoutModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Daily Routine</Text>
+                <Text style={styles.modalSubtitle}>
+                  {completedCount}/{totalCount} Done
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity onPress={resetRoutine}>
+                  <Ionicons name="refresh" size={24} color="#FF4444" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowWorkoutModal(false)}>
+                  <Ionicons name="close-circle" size={30} color="#8a9a9f" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.gaugeBackground}>
+              <View
+                style={[styles.gaugeFill, { width: `${progressPercent}%` }]}
+              />
+            </View>
+            <View style={styles.addTaskRow}>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Add workout..."
+                placeholderTextColor="#666"
+                value={newTaskName}
+                onChangeText={setNewTaskName}
+              />
+              <TouchableOpacity style={styles.modalAddBtn} onPress={addTask}>
+                <Ionicons name="add" size={24} color="#141f23" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {dailyTasks.map((t) => (
+                <View key={t.id} style={styles.taskItem}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                    onPress={async () => {
+                      await supabase
+                        .from("daily_workouts")
+                        .update({ is_completed: !t.is_completed })
+                        .eq("id", t.id);
+                      fetchData();
+                    }}
+                  >
+                    <Ionicons
+                      name={
+                        t.is_completed ? "checkmark-circle" : "ellipse-outline"
+                      }
+                      size={24}
+                      color={t.is_completed ? "#59cb01" : "#8a9a9f"}
+                    />
+                    <Text
+                      style={[
+                        styles.taskText,
+                        t.is_completed && {
+                          textDecorationLine: "line-through",
+                          color: "#8a9a9f",
+                        },
+                      ]}
+                    >
+                      {t.workout_name}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      await supabase
+                        .from("daily_workouts")
+                        .delete()
+                        .eq("id", t.id);
+                      fetchData();
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#FF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TIMER MODAL */}
+      <Modal visible={showTimerModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { alignItems: "center" }]}>
+            <Text style={styles.bigTimer}>{timerDisplay}</Text>
             <TouchableOpacity
-              style={[styles.gridButton, { backgroundColor: "#007AFF" }]}
-              onPress={() => navigation.navigate("EcoCashPayment")}
+              style={[
+                styles.bigTimerBtn,
+                activeSession ? styles.stopBtn : styles.startBtn,
+              ]}
+              onPress={handleWorkoutAction}
             >
-              <Ionicons name="phone-portrait" size={28} color="#fff" />
-              <Text style={styles.gridButtonText}>EcoCash Pay</Text>
+              <Text style={styles.bigTimerBtnText}>
+                {activeSession ? "STOP WORKOUT" : "START WORKOUT"}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.gridButton, { backgroundColor: "#5856D6" }]}
-              onPress={() => navigation.navigate("Notifications")}
+              style={{ marginTop: 20 }}
+              onPress={() => setShowTimerModal(false)}
             >
-              <Ionicons name="notifications" size={28} color="#fff" />
-              <Text style={styles.gridButtonText}>Alerts</Text>
+              <Text style={{ color: "#8a9a9f" }}>CLOSE</Text>
             </TouchableOpacity>
           </View>
         </View>
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 };
 
+const StatTile = ({ icon, color, value, label, onPress }) => (
+  <TouchableOpacity style={styles.statItem} onPress={onPress}>
+    <View style={[styles.statIconContainer, { backgroundColor: `${color}15` }]}>
+      <Ionicons name={icon} size={24} color={color} />
+    </View>
+    <Text style={styles.statNumber}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </TouchableOpacity>
+);
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#141f23" },
   container: { flex: 1, paddingHorizontal: 20 },
-  profileHeader: {
+  header: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 20,
-    marginBottom: 25,
+    marginVertical: 25,
   },
-  profileButton: { flexDirection: "row", alignItems: "center", flex: 1 },
+  greeting: { fontSize: 14, color: "#8a9a9f" },
+  userName: { fontSize: 24, fontWeight: "bold", color: "#FFF" },
   avatarPlaceholder: {
-    width: 55,
-    height: 55,
-    borderRadius: 28,
-    backgroundColor: "#59cb01",
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#1e2b2f",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 22, fontWeight: "bold", color: "#141f23" },
-  profileInfo: { marginLeft: 15 },
-  greeting: { color: "#8a9a9f", fontSize: 12 },
-  userName: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  roleBadge: {
-    backgroundColor: "rgba(89, 203, 1, 0.1)",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 5,
-    marginTop: 4,
+  avatarInitial: { fontSize: 20, color: "#59cb01", fontWeight: "bold" },
+  staffActionRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: "#1e2b2f",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
   },
-  roleText: { color: "#59cb01", fontSize: 10, fontWeight: "bold" },
-  logoutButton: { padding: 10 },
-  statusCard: {
+  actionBtnText: { color: "#fff", fontWeight: "bold", fontSize: 12 },
+  membershipCard: {
     backgroundColor: "#1e2b2f",
     borderRadius: 20,
     padding: 20,
     marginBottom: 25,
   },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-  cardTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusText: { color: "#141f23", fontWeight: "bold", fontSize: 10 },
-  statusDetails: { marginBottom: 15 },
-  statusItem: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  statusLabel: { color: "#8a9a9f", marginLeft: 10, width: 70 },
-  statusValue: { color: "#fff", fontWeight: "600" },
-  renewButton: {
-    backgroundColor: "#59cb01",
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 15,
-    borderRadius: 12,
-    gap: 10,
-  },
-  renewButtonText: { fontWeight: "bold", color: "#141f23" },
-  sectionTitle: {
+  membershipTitle: { color: "#8a9a9f", fontSize: 10, fontWeight: "bold" },
+  planNameText: {
     color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
+    marginVertical: 5,
+  },
+  expiryText: { color: "#8a9a9f", marginBottom: 15 },
+  primaryButton: {
+    backgroundColor: "#59cb01",
+    padding: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  primaryButtonText: { color: "#141f23", fontWeight: "bold" },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#FFF",
     marginBottom: 15,
   },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 25,
-  },
-  statCard: {
-    width: "48%",
+  analyticsSection: { marginBottom: 10 },
+  analyticsRow: { flexDirection: "row", gap: 10, marginBottom: 25 },
+  analyticsCard: {
+    flex: 1,
     backgroundColor: "#1e2b2f",
     padding: 15,
     borderRadius: 15,
-    alignItems: "center",
-    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: "#59cb01",
   },
-  statNumber: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "bold",
-    marginVertical: 5,
+  analyticsLabel: { color: "#8a9a9f", fontSize: 12 },
+  analyticsValue: { color: "#fff", fontSize: 20, fontWeight: "bold" },
+  statsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
   },
-  statLabel: { color: "#8a9a9f", fontSize: 12 },
-  sectionContainer: { marginBottom: 20 },
-  buttonGrid: { flexDirection: "row", justifyContent: "space-between" },
-  gridButton: {
+  statItem: {
     width: "48%",
+    backgroundColor: "#1e2b2f",
+    borderRadius: 20,
     padding: 20,
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  statIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  statNumber: { fontSize: 22, fontWeight: "bold", color: "#FFF" },
+  statLabel: { fontSize: 12, color: "#8a9a9f" },
+  historyTile: {
+    width: "100%",
+    backgroundColor: "#1e2b2f",
     borderRadius: 15,
+    padding: 15,
+    flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    marginBottom: 20,
   },
-  gridButtonText: { color: "#fff", fontWeight: "bold", fontSize: 13 },
+  historyText: { flex: 1, color: "#FFF", fontWeight: "bold" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#1e2b2f",
+    borderRadius: 25,
+    padding: 20,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 15,
+  },
+  modalTitle: { color: "#fff", fontSize: 20, fontWeight: "bold" },
+  modalSubtitle: { color: "#8a9a9f", fontSize: 14, marginBottom: 15 },
+  gaugeBackground: {
+    height: 6,
+    backgroundColor: "#141f23",
+    borderRadius: 3,
+    marginBottom: 15,
+  },
+  gaugeFill: { height: "100%", backgroundColor: "#59cb01", borderRadius: 3 },
+  addTaskRow: { flexDirection: "row", gap: 10, marginBottom: 15 },
+  modalInput: {
+    flex: 1,
+    backgroundColor: "#141f23",
+    padding: 12,
+    borderRadius: 12,
+    color: "#fff",
+  },
+  modalAddBtn: {
+    backgroundColor: "#59cb01",
+    width: 50,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  taskItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2a3a3f",
+  },
+  taskText: { color: "#fff", fontSize: 16 },
+  bigTimer: {
+    fontSize: 50,
+    color: "#59cb01",
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: 30,
+  },
+  bigTimerBtn: {
+    width: "100%",
+    padding: 18,
+    borderRadius: 15,
+    alignItems: "center",
+  },
+  startBtn: { backgroundColor: "#59cb01" },
+  stopBtn: { backgroundColor: "#FF4444" },
+  bigTimerBtnText: { fontWeight: "bold", color: "#141f23" },
 });
 
 export default MainScreen;

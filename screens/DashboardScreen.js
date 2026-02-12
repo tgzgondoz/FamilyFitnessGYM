@@ -11,10 +11,10 @@ import {
   StatusBar,
   ActivityIndicator,
 } from "react-native";
-import { LineChart, PieChart } from "react-native-chart-kit";
+import { LineChart } from "react-native-chart-kit";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../config/supabase"; // Ensure this matches your path
+import { supabase } from "../config/supabase";
 
 const { width } = Dimensions.get("window");
 
@@ -22,19 +22,19 @@ const DashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [timeRange, setTimeRange] = useState("month");
+  const [timeRange, setTimeRange] = useState("month"); // 'week', 'month', 'year'
   const [transactions, setTransactions] = useState([]);
-
+  const [topMembers, setTopMembers] = useState([]);
   const [stats, setStats] = useState({
     totalRevenue: 0,
-    activeSubscriptions: 0,
-    newSubscriptions: 0,
+    activeCheckins: 0,
+    newUsers: 0,
     totalClients: 0,
   });
 
   const [revenueData, setRevenueData] = useState({
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-    datasets: [{ data: [0, 0, 0, 0, 0, 0] }],
+    labels: ["N/A"],
+    datasets: [{ data: [0] }],
   });
 
   useEffect(() => {
@@ -43,102 +43,155 @@ const DashboardScreen = ({ navigation }) => {
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
 
-      // 1. Fetch Total Clients Count
-      const { count: clientCount } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
+      const now = new Date();
+      let startDate = new Date();
+      if (timeRange === "week") startDate.setDate(now.getDate() - 7);
+      else if (timeRange === "month") startDate.setMonth(now.getMonth() - 1);
+      else startDate.setFullYear(now.getFullYear() - 1);
 
-      // 2. Fetch Active (Users with push tokens)
-      const { count: activeCount } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true })
-        .not('expo_push_token', 'is', null);
+      const startDateISO = startDate.toISOString();
 
-      // 3. Fetch Total Revenue from Payments
-      const { data: revenueRows } = await supabase
-        .from('payments')
-        .select('amount');
+      // 1. Parallel Fetching for Speed
+      const [
+        clientsCount,
+        checkInCount,
+        newUsersRes,
+        salesRes,
+        recentSalesRes,
+        topCheckins,
+      ] = await Promise.all([
+        // Total Clients
+        supabase
+          .from("users")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "client"),
 
-      const totalRev = revenueRows?.reduce((sum, row) => sum + Number(row.amount), 0) || 0;
+        // Active In Gym (Last 24h)
+        supabase
+          .from("check_ins")
+          .select("user_id", { count: "exact", head: true })
+          .gte(
+            "check_in_time",
+            new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+          ),
 
-      // 4. Fetch Recent Transactions with User Email
-      const { data: recentTx, error: txError } = await supabase
-        .from('payments')
-        .select(`
-          amount,
-          created_at,
-          user_id
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5);
+        // New Joins (Joined in time range)
+        supabase
+          .from("users")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", startDateISO)
+          .eq("role", "client"),
 
-      // 5. Simulated Trend Data for Chart based on real total
-      // In a real production app, you'd use the 'monthly_revenue' view we discussed
-      const chartValues = [totalRev * 0.4, totalRev * 0.6, totalRev * 0.7, totalRev * 0.85, totalRev * 0.9, totalRev];
+        // Revenue from 'sales' table to match StaffSalesScreen
+        supabase
+          .from("sales")
+          .select("amount, created_at")
+          .gte("created_at", startDateISO),
+
+        // Recent Sales List
+        supabase
+          .from("sales")
+          .select(
+            `amount, product_name, created_at, client:users!sales_client_id_fkey(full_name)`
+          )
+          .order("created_at", { ascending: false })
+          .limit(5),
+
+        // Top Members Query
+        supabase
+          .from("check_ins")
+          .select(`user_id, users:user_id(full_name)`)
+          .gte("check_in_time", startDateISO)
+          .not("user_id", "is", null),
+      ]);
+
+      // 2. Process Revenue
+      const totalRev =
+        salesRes.data?.reduce((sum, row) => sum + Number(row.amount), 0) || 0;
+
+      // 3. Process Top Members (Consistency)
+      const memberCounts = {};
+      topCheckins.data?.forEach((ci) => {
+        const id = ci.user_id;
+        if (!memberCounts[id]) {
+          memberCounts[id] = {
+            name: ci.users?.full_name || "Member",
+            count: 0,
+          };
+        }
+        memberCounts[id].count += 1;
+      });
+
+      const sortedMembers = Object.values(memberCounts)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+
+      // 4. Group Revenue for Line Chart
+      const groupedRevenue = salesRes.data?.reduce((acc, curr) => {
+        const d = new Date(curr.created_at).toLocaleDateString([], {
+          month: "short",
+          day: "numeric",
+        });
+        acc[d] = (acc[d] || 0) + Number(curr.amount);
+        return acc;
+      }, {});
+
+      const chartLabels = Object.keys(groupedRevenue || {}).slice(-6);
+      const chartValues = Object.values(groupedRevenue || {}).slice(-6);
 
       setStats({
         totalRevenue: totalRev,
-        activeSubscriptions: activeCount || 0,
-        newSubscriptions: Math.floor((activeCount || 0) / 4), // Placeholder for demo
-        totalClients: clientCount || 0,
+        activeCheckins: checkInCount.count || 0,
+        newUsers: newUsersRes.count || 0,
+        totalClients: clientsCount.count || 0,
       });
 
-      setTransactions(recentTx || []);
-      
-      setRevenueData({
-        labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-        datasets: [{
-          data: chartValues.map(v => v > 0 ? v : 0),
-          color: (opacity = 1) => `rgba(89, 203, 1, ${opacity})`,
-        }],
-      });
+      setTopMembers(sortedMembers);
+      setTransactions(recentSalesRes.data || []);
 
+      if (chartLabels.length > 0) {
+        setRevenueData({
+          labels: chartLabels,
+          datasets: [
+            {
+              data: chartValues,
+              color: (opacity = 1) => `rgba(89, 203, 1, ${opacity})`,
+            },
+          ],
+        });
+      }
     } catch (error) {
-      console.error("Dashboard Error:", error);
+      console.error("Dashboard Sync Error:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchDashboardData();
-    setRefreshing(false);
-  };
-
-  const StatCard = ({ title, value, icon, color, trend }) => (
+  const StatCard = ({ title, value, icon, color }) => (
     <View style={styles.statCardWrapper}>
       <View style={styles.statCard}>
-        <View style={[styles.statIconCircle, { backgroundColor: `${color}15` }]}>
+        <View
+          style={[styles.statIconCircle, { backgroundColor: `${color}15` }]}
+        >
           <Ionicons name={icon} size={20} color={color} />
         </View>
         <Text style={styles.statValue}>{value}</Text>
         <Text style={styles.statTitle}>{title}</Text>
-        {trend && (
-          <View style={styles.trendBox}>
-            <Ionicons name="trending-up" size={12} color="#59cb01" />
-            <Text style={styles.trendText}>{trend}%</Text>
-          </View>
-        )}
       </View>
     </View>
   );
 
-  const chartConfig = {
-    backgroundGradientFrom: "#1e2b2f",
-    backgroundGradientTo: "#1e2b2f",
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(89, 203, 1, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(138, 154, 159, ${opacity})`,
-    propsForDots: { r: "4", strokeWidth: "2", stroke: "#59cb01" },
-    style: { borderRadius: 16 },
-  };
-
   if (loading && !refreshing) {
     return (
-      <View style={[styles.safeArea, {justifyContent: 'center', alignItems: 'center'}]}>
+      <View
+        style={[
+          styles.safeArea,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <ActivityIndicator size="large" color="#59cb01" />
       </View>
     );
@@ -151,7 +204,7 @@ const DashboardScreen = ({ navigation }) => {
       <View style={styles.topHeader}>
         <View>
           <Text style={styles.headerTitle}>Family Fitness</Text>
-          <Text style={styles.headerSubtitle}>Analytics Overview</Text>
+          <Text style={styles.headerSubtitle}>Revenue & Usage Dashboard</Text>
         </View>
         <View style={styles.selector}>
           {["week", "month", "year"].map((r) => (
@@ -160,7 +213,12 @@ const DashboardScreen = ({ navigation }) => {
               onPress={() => setTimeRange(r)}
               style={[styles.selBtn, timeRange === r && styles.selBtnActive]}
             >
-              <Text style={[styles.selText, timeRange === r && styles.selTextActive]}>
+              <Text
+                style={[
+                  styles.selText,
+                  timeRange === r && styles.selTextActive,
+                ]}
+              >
                 {r.charAt(0).toUpperCase()}
               </Text>
             </TouchableOpacity>
@@ -170,53 +228,115 @@ const DashboardScreen = ({ navigation }) => {
 
       <ScrollView
         contentContainerStyle={styles.scrollBody}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#59cb01" />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchDashboardData();
+            }}
+            tintColor="#59cb01"
+          />
+        }
       >
         <View style={styles.statsGrid}>
-          <StatCard title="Revenue" value={`$${stats.totalRevenue.toLocaleString()}`} icon="cash" color="#59cb01" trend="12" />
-          <StatCard title="Active" value={stats.activeSubscriptions} icon="people" color="#36a1d6" trend="5" />
-          <StatCard title="New" value={stats.newSubscriptions} icon="person-add" color="#ffd93d" />
-          <StatCard title="Total" value={stats.totalClients} icon="id-card" color="#ff6b6b" />
+          <StatCard
+            title="Revenue"
+            value={`$${stats.totalRevenue.toFixed(2)}`}
+            icon="cash-outline"
+            color="#59cb01"
+          />
+          <StatCard
+            title="In Gym"
+            value={stats.activeCheckins}
+            icon="walk-outline"
+            color="#36a1d6"
+          />
+          <StatCard
+            title="New Joins"
+            value={stats.newUsers}
+            icon="person-add-outline"
+            color="#ffd93d"
+          />
+          <StatCard
+            title="Total"
+            value={stats.totalClients}
+            icon="people-outline"
+            color="#ff6b6b"
+          />
         </View>
 
+        {/* Consistent Members Section */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Revenue Trend</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>
+              Consistent Members ({timeRange})
+            </Text>
+            <Ionicons name="trophy" size={18} color="#FFD700" />
+          </View>
+          {topMembers.length > 0 ? (
+            topMembers.map((member, i) => (
+              <View key={i} style={styles.memberRow}>
+                <View style={[styles.rankBadge, i === 0 && styles.goldRank]}>
+                  <Text style={styles.rankText}>{i + 1}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.actName}>{member.name}</Text>
+                  <Text style={styles.actDate}>{member.count} check-ins</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No check-ins recorded.</Text>
+          )}
+        </View>
+
+        {/* Revenue Chart */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Sales Trend ($)</Text>
           <LineChart
             data={revenueData}
             width={width - 48}
-            height={200}
+            height={180}
             chartConfig={chartConfig}
             bezier
             style={styles.chart}
           />
         </View>
 
+        {/* Recent Activity (Synced with Sales table) */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Recent Transactions</Text>
-          {transactions.length > 0 ? (
-            transactions.map((tx, i) => (
-              <View key={i} style={styles.activityRow}>
-                <View style={styles.activityIcon}>
-                  <Ionicons name="receipt-outline" size={18} color="#59cb01" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.actName}>EcoCash Payment</Text>
-                  <Text style={styles.actDate}>{new Date(tx.created_at).toLocaleDateString()}</Text>
-                </View>
-                <Text style={styles.actAmount}>+${tx.amount}</Text>
+          <Text style={styles.cardTitle}>Recent Sales Activity</Text>
+          {transactions.map((tx, i) => (
+            <View key={i} style={styles.activityRow}>
+              <View style={styles.activityIcon}>
+                <Ionicons name="receipt-outline" size={18} color="#59cb01" />
               </View>
-            ))
-          ) : (
-            <Text style={{color: '#8a9a9f', textAlign: 'center', padding: 20}}>No payments found.</Text>
-          )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.actName}>
+                  {tx.client?.full_name || "Walk-in Guest"}
+                </Text>
+                <Text style={styles.actDate}>{tx.product_name}</Text>
+              </View>
+              <Text style={styles.actAmount}>+${tx.amount.toFixed(2)}</Text>
+            </View>
+          ))}
         </View>
 
-        <View style={{ height: 30 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
+const chartConfig = {
+  backgroundGradientFrom: "#1e2b2f",
+  backgroundGradientTo: "#1e2b2f",
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(89, 203, 1, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(138, 154, 159, ${opacity})`,
+  propsForDots: { r: "4", strokeWidth: "2", stroke: "#59cb01" },
+};
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#141f23" },
@@ -225,7 +345,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 24,
-    backgroundColor: "#141f23",
   },
   headerTitle: { fontSize: 24, fontWeight: "800", color: "#f2faea" },
   headerSubtitle: { fontSize: 13, color: "#8a9a9f" },
@@ -241,7 +360,7 @@ const styles = StyleSheet.create({
   selTextActive: { color: "#141f23" },
   scrollBody: { paddingHorizontal: 16 },
   statsGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 10 },
-  statCardWrapper: { width: "50%", padding: 8 },
+  statCardWrapper: { width: "50%", padding: 6 },
   statCard: {
     backgroundColor: "#1e2b2f",
     borderRadius: 20,
@@ -259,27 +378,34 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: "bold", color: "#f2faea" },
   statTitle: { fontSize: 12, color: "#8a9a9f", marginTop: 2 },
-  trendBox: { flexDirection: "row", alignItems: "center", marginTop: 8 },
-  trendText: {
-    color: "#59cb01",
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 4,
-  },
   card: {
     backgroundColor: "#1e2b2f",
     borderRadius: 24,
     padding: 20,
     marginBottom: 16,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  cardTitle: { color: "#f2faea", fontSize: 16, fontWeight: "700" },
+  memberRow: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
+  rankBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#2c3e44",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  goldRank: {
+    backgroundColor: "#FFD70033",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderColor: "#FFD700",
   },
-  cardTitle: {
-    color: "#f2faea",
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 16,
-  },
+  rankText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
   chart: { marginLeft: -16, borderRadius: 16 },
   activityRow: {
     flexDirection: "row",
@@ -300,6 +426,7 @@ const styles = StyleSheet.create({
   actName: { color: "#f2faea", fontSize: 14, fontWeight: "600" },
   actDate: { color: "#8a9a9f", fontSize: 11 },
   actAmount: { color: "#59cb01", fontWeight: "bold", fontSize: 14 },
+  emptyText: { color: "#4a5a5f", textAlign: "center", padding: 10 },
 });
 
 export default DashboardScreen;
