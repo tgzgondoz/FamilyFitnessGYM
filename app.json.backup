@@ -1,39 +1,38 @@
 {
   "expo": {
     "name": "FamilyFitnessGYM",
-    "slug": "familyfitnessgym",
+    "slug": "FamilyFitnessGYM",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.tatendagondo.familyfitnessgym"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.tatendagondo.familyfitnessgym"
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      "expo-asset"
+    ],
     "extra": {
       "eas": {
-        "projectId": "356464ae-a766-4100-8531-bb2cd554f1d6"
+        "projectId": "3597b60a-5e84-447b-891b-d0e0102bc4f4"
       }
     },
-    "owner": "tatenda_gondo",
-    "plugins": []  
+    "owner": "gashie22"
   }
 }
